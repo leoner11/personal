@@ -1,0 +1,7 @@
+.DS_Store
+app/build/
+app/.dart_tool/
+app/.flutter-plugins-dependencies
+app/macos/Pods/
+app/macos/Flutter/ephemeral/
+app/macos/Flutter/GeneratedPluginRegistrant.swift
