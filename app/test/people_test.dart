@@ -11,14 +11,21 @@ void main() {
   setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  Future<int> add(String name, List<OccasionTag> tags, {String? wa, String? wc}) =>
-      db.addPerson(PeopleCompanion.insert(
-        name: name,
-        waNumber: Value(wa),
-        wechatId: Value(wc),
-        preferredChannel: Value(wa != null ? 'wa' : 'wechat'),
-        occasionTags: Value(tags.map((t) => t.name).toList()),
-      ));
+  // Returns the UUID, not the rowid — insert() gives the latter and it is
+  // not the primary key any more.
+  Future<String> add(String name, List<OccasionTag> tags,
+      {String? wa, String? wc}) async {
+    final id = newId();
+    await db.addPerson(PeopleCompanion.insert(
+      id: Value(id),
+      name: name,
+      waNumber: Value(wa),
+      wechatId: Value(wc),
+      preferredChannel: Value(wa != null ? 'wa' : 'wechat'),
+      occasionTags: Value(tags.map((t) => t.name).toList()),
+    ));
+    return id;
+  }
 
   test('tag filter matches first, middle, last and only positions', () async {
     // The LIKE-over-a-comma-string filter is the one bit of real logic in
@@ -64,6 +71,17 @@ void main() {
     expect(uri.scheme, 'whatsapp');
     expect(uri.query, contains('phone=6281234567890')); // punctuation stripped
     expect(uri.toString(), isNot(contains('wa.me')));
+  });
+
+  test('ids are uuids, unique per row, so two devices cannot collide', () async {
+    // ⚠ The bug this replaced: autoincrement ids from two independent
+    // sequences produce different people sharing an id, and last-write-wins
+    // then merges them and destroys one.
+    final a = await add('A', const [], wa: '1');
+    final b = await add('B', const [], wa: '2');
+    expect(a, isNot(b));
+    expect(a.length, 36);
+    expect(RegExp(r'^[0-9a-f-]{36}$').hasMatch(a), isTrue);
   });
 
   test('mid-autumn constant is the confirmed 2026 date', () {

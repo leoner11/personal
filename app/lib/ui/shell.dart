@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import '../data/database.dart';
+import 'add_person_sheet.dart';
 import '../domain/config.dart';
 import '../domain/money_fmt.dart';
 import '../domain/sync.dart';
@@ -51,6 +52,9 @@ class _ShellState extends State<Shell> {
           SingleActivator(
               LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i),
               meta: true): () => _go(s),
+        // Add person from anywhere — the most-used action in the app.
+        const SingleActivator(LogicalKeyboardKey.keyN, meta: true): () =>
+            AddPersonSheet.show(context, widget.db),
       },
       child: Focus(
         autofocus: true,

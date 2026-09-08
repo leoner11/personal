@@ -10,6 +10,19 @@ import '../domain/occasions.dart';
 /// creation time. Occasions are seeded; pings are chosen by the user. NOTHING
 /// needs computing on a schedule.
 ///   ⇒ flutter_local_notifications, on-device. No server cron, no FCM, no APNs.
+/// A notification id must be an int, and it must be REPRODUCIBLE — the old id
+/// has to be cancellable on the next launch or duplicates accumulate.
+/// `String.hashCode` is not guaranteed stable across runs, so hash explicitly.
+/// FNV-1a, folded to 28 bits, then 3 bits of slot: 8 notifications per row.
+int notificationId(String uuid, int slot) {
+  var h = 0x811c9dc5;
+  for (final c in uuid.codeUnits) {
+    h ^= c;
+    h = (h * 0x01000193) & 0xffffffff;
+  }
+  return ((h & 0x0fffffff) * 8) + (slot & 0x7);
+}
+
 class Notifier {
   Notifier(this.db);
   final AppDatabase db;
@@ -59,14 +72,14 @@ class Notifier {
 
       // T-14 — the whole point. Gifts need lead time; a same-day
       // notification is useless and was the original complaint.
-      n += await _at(o.id * 10 + 1, o.date.subtract(const Duration(days: 14)),
+      n += await _at(notificationId(o.id, 1), o.date.subtract(const Duration(days: 14)),
           '${o.name} in 2 weeks', '$tagged people tagged');
       // T-3 — second pass for anyone still unmarked.
-      n += await _at(o.id * 10 + 2, o.date.subtract(const Duration(days: 3)),
+      n += await _at(notificationId(o.id, 2), o.date.subtract(const Duration(days: 3)),
           '${o.name} in 3 days', '$tagged people tagged');
       // T+1 — close-out. ⚠ Without this, expected rows accumulate forever and
       // the balance silently drifts from reality.
-      n += await _at(o.id * 10 + 3, o.date.add(const Duration(days: 1)),
+      n += await _at(notificationId(o.id, 3), o.date.add(const Duration(days: 1)),
           'Mark ${o.name} gift spend as actual?', 'Confirm what was spent');
     }
 
@@ -74,7 +87,7 @@ class Notifier {
     // notification, self-scheduled, not a nag stream.
     for (final p in people) {
       if (p.pingDate == null) continue;
-      n += await _at(100000 + p.id, p.pingDate!,
+      n += await _at(notificationId(p.id, 0), p.pingDate!,
           'Ping: ${p.name}${p.company != null ? ' (${p.company})' : ''}',
           p.pingNote ?? 'no note');
     }

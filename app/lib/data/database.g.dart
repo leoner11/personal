@@ -10,16 +10,13 @@ class $PeopleTable extends People with TableInfo<$PeopleTable, Person> {
   $PeopleTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    clientDefault: newId,
   );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
@@ -280,7 +277,7 @@ class $PeopleTable extends People with TableInfo<$PeopleTable, Person> {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Person(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       name: attachedDatabase.typeMapping.read(
@@ -350,7 +347,7 @@ class $PeopleTable extends People with TableInfo<$PeopleTable, Person> {
 }
 
 class Person extends DataClass implements Insertable<Person> {
-  final int id;
+  final String id;
   final String name;
   final String? company;
   final String? waNumber;
@@ -392,7 +389,7 @@ class Person extends DataClass implements Insertable<Person> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || company != null) {
       map['company'] = Variable<String>(company);
@@ -474,7 +471,7 @@ class Person extends DataClass implements Insertable<Person> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Person(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       company: serializer.fromJson<String?>(json['company']),
       waNumber: serializer.fromJson<String?>(json['waNumber']),
@@ -494,7 +491,7 @@ class Person extends DataClass implements Insertable<Person> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'company': serializer.toJson<String?>(company),
       'waNumber': serializer.toJson<String?>(waNumber),
@@ -512,7 +509,7 @@ class Person extends DataClass implements Insertable<Person> {
   }
 
   Person copyWith({
-    int? id,
+    String? id,
     String? name,
     Value<String?> company = const Value.absent(),
     Value<String?> waNumber = const Value.absent(),
@@ -624,7 +621,7 @@ class Person extends DataClass implements Insertable<Person> {
 }
 
 class PeopleCompanion extends UpdateCompanion<Person> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<String> name;
   final Value<String?> company;
   final Value<String?> waNumber;
@@ -638,6 +635,7 @@ class PeopleCompanion extends UpdateCompanion<Person> {
   final Value<String?> pingNote;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
   const PeopleCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -653,6 +651,7 @@ class PeopleCompanion extends UpdateCompanion<Person> {
     this.pingNote = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   PeopleCompanion.insert({
     this.id = const Value.absent(),
@@ -669,9 +668,10 @@ class PeopleCompanion extends UpdateCompanion<Person> {
     this.pingNote = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   }) : name = Value(name);
   static Insertable<Person> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<String>? name,
     Expression<String>? company,
     Expression<String>? waNumber,
@@ -685,6 +685,7 @@ class PeopleCompanion extends UpdateCompanion<Person> {
     Expression<String>? pingNote,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -701,11 +702,12 @@ class PeopleCompanion extends UpdateCompanion<Person> {
       if (pingNote != null) 'ping_note': pingNote,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   PeopleCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<String>? name,
     Value<String?>? company,
     Value<String?>? waNumber,
@@ -719,6 +721,7 @@ class PeopleCompanion extends UpdateCompanion<Person> {
     Value<String?>? pingNote,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
   }) {
     return PeopleCompanion(
       id: id ?? this.id,
@@ -735,6 +738,7 @@ class PeopleCompanion extends UpdateCompanion<Person> {
       pingNote: pingNote ?? this.pingNote,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -742,7 +746,7 @@ class PeopleCompanion extends UpdateCompanion<Person> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -785,6 +789,9 @@ class PeopleCompanion extends UpdateCompanion<Person> {
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -804,7 +811,8 @@ class PeopleCompanion extends UpdateCompanion<Person> {
           ..write('pingDate: $pingDate, ')
           ..write('pingNote: $pingNote, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -818,16 +826,13 @@ class $OccasionsTable extends Occasions
   $OccasionsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    clientDefault: newId,
   );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
@@ -967,7 +972,7 @@ class $OccasionsTable extends Occasions
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Occasion(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       name: attachedDatabase.typeMapping.read(
@@ -1004,7 +1009,7 @@ class $OccasionsTable extends Occasions
 }
 
 class Occasion extends DataClass implements Insertable<Occasion> {
-  final int id;
+  final String id;
   final String name;
   final DateTime date;
 
@@ -1025,7 +1030,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     map['name'] = Variable<String>(name);
     map['date'] = Variable<DateTime>(date);
     map['tag'] = Variable<String>(tag);
@@ -1061,7 +1066,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Occasion(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       date: serializer.fromJson<DateTime>(json['date']),
       tag: serializer.fromJson<String>(json['tag']),
@@ -1074,7 +1079,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'date': serializer.toJson<DateTime>(date),
       'tag': serializer.toJson<String>(tag),
@@ -1085,7 +1090,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
   }
 
   Occasion copyWith({
-    int? id,
+    String? id,
     String? name,
     DateTime? date,
     String? tag,
@@ -1144,13 +1149,14 @@ class Occasion extends DataClass implements Insertable<Occasion> {
 }
 
 class OccasionsCompanion extends UpdateCompanion<Occasion> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<String> name;
   final Value<DateTime> date;
   final Value<String> tag;
   final Value<String?> country;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
   const OccasionsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -1159,6 +1165,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
     this.country = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   OccasionsCompanion.insert({
     this.id = const Value.absent(),
@@ -1168,17 +1175,19 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
     this.country = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   }) : name = Value(name),
        date = Value(date),
        tag = Value(tag);
   static Insertable<Occasion> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<String>? name,
     Expression<DateTime>? date,
     Expression<String>? tag,
     Expression<String>? country,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1188,17 +1197,19 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
       if (country != null) 'country': country,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   OccasionsCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<String>? name,
     Value<DateTime>? date,
     Value<String>? tag,
     Value<String?>? country,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
   }) {
     return OccasionsCompanion(
       id: id ?? this.id,
@@ -1208,6 +1219,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
       country: country ?? this.country,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -1215,7 +1227,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -1235,6 +1247,9 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -1247,7 +1262,8 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
           ..write('tag: $tag, ')
           ..write('country: $country, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -1261,16 +1277,13 @@ class $EngagementsTable extends Engagements
   $EngagementsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    clientDefault: newId,
   );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
@@ -1295,11 +1308,11 @@ class $EngagementsTable extends Engagements
     'counterpartyId',
   );
   @override
-  late final GeneratedColumn<int> counterpartyId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> counterpartyId = GeneratedColumn<String>(
     'counterparty_id',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
@@ -1462,7 +1475,7 @@ class $EngagementsTable extends Engagements
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Engagement(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       name: attachedDatabase.typeMapping.read(
@@ -1474,7 +1487,7 @@ class $EngagementsTable extends Engagements
         data['${effectivePrefix}type'],
       )!,
       counterpartyId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}counterparty_id'],
       ),
       status: attachedDatabase.typeMapping.read(
@@ -1511,12 +1524,12 @@ class $EngagementsTable extends Engagements
 }
 
 class Engagement extends DataClass implements Insertable<Engagement> {
-  final int id;
+  final String id;
   final String name;
 
   /// deal | jv | client | lead
   final String type;
-  final int? counterpartyId;
+  final String? counterpartyId;
 
   /// ⚠ FREE TEXT ON PURPOSE. The moment this becomes a dropdown of stages,
   /// this is a sales tool and scope has escaped.
@@ -1541,11 +1554,11 @@ class Engagement extends DataClass implements Insertable<Engagement> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     map['name'] = Variable<String>(name);
     map['type'] = Variable<String>(type);
     if (!nullToAbsent || counterpartyId != null) {
-      map['counterparty_id'] = Variable<int>(counterpartyId);
+      map['counterparty_id'] = Variable<String>(counterpartyId);
     }
     if (!nullToAbsent || status != null) {
       map['status'] = Variable<String>(status);
@@ -1599,10 +1612,10 @@ class Engagement extends DataClass implements Insertable<Engagement> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Engagement(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       type: serializer.fromJson<String>(json['type']),
-      counterpartyId: serializer.fromJson<int?>(json['counterpartyId']),
+      counterpartyId: serializer.fromJson<String?>(json['counterpartyId']),
       status: serializer.fromJson<String?>(json['status']),
       valueMinor: serializer.fromJson<int?>(json['valueMinor']),
       currency: serializer.fromJson<String?>(json['currency']),
@@ -1615,10 +1628,10 @@ class Engagement extends DataClass implements Insertable<Engagement> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'type': serializer.toJson<String>(type),
-      'counterpartyId': serializer.toJson<int?>(counterpartyId),
+      'counterpartyId': serializer.toJson<String?>(counterpartyId),
       'status': serializer.toJson<String?>(status),
       'valueMinor': serializer.toJson<int?>(valueMinor),
       'currency': serializer.toJson<String?>(currency),
@@ -1629,10 +1642,10 @@ class Engagement extends DataClass implements Insertable<Engagement> {
   }
 
   Engagement copyWith({
-    int? id,
+    String? id,
     String? name,
     String? type,
-    Value<int?> counterpartyId = const Value.absent(),
+    Value<String?> counterpartyId = const Value.absent(),
     Value<String?> status = const Value.absent(),
     Value<int?> valueMinor = const Value.absent(),
     Value<String?> currency = const Value.absent(),
@@ -1719,16 +1732,17 @@ class Engagement extends DataClass implements Insertable<Engagement> {
 }
 
 class EngagementsCompanion extends UpdateCompanion<Engagement> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<String> name;
   final Value<String> type;
-  final Value<int?> counterpartyId;
+  final Value<String?> counterpartyId;
   final Value<String?> status;
   final Value<int?> valueMinor;
   final Value<String?> currency;
   final Value<String?> notes;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
   const EngagementsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -1740,6 +1754,7 @@ class EngagementsCompanion extends UpdateCompanion<Engagement> {
     this.notes = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   EngagementsCompanion.insert({
     this.id = const Value.absent(),
@@ -1752,18 +1767,20 @@ class EngagementsCompanion extends UpdateCompanion<Engagement> {
     this.notes = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   }) : name = Value(name);
   static Insertable<Engagement> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<String>? name,
     Expression<String>? type,
-    Expression<int>? counterpartyId,
+    Expression<String>? counterpartyId,
     Expression<String>? status,
     Expression<int>? valueMinor,
     Expression<String>? currency,
     Expression<String>? notes,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1776,20 +1793,22 @@ class EngagementsCompanion extends UpdateCompanion<Engagement> {
       if (notes != null) 'notes': notes,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   EngagementsCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<String>? name,
     Value<String>? type,
-    Value<int?>? counterpartyId,
+    Value<String?>? counterpartyId,
     Value<String?>? status,
     Value<int?>? valueMinor,
     Value<String?>? currency,
     Value<String?>? notes,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
   }) {
     return EngagementsCompanion(
       id: id ?? this.id,
@@ -1802,6 +1821,7 @@ class EngagementsCompanion extends UpdateCompanion<Engagement> {
       notes: notes ?? this.notes,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -1809,7 +1829,7 @@ class EngagementsCompanion extends UpdateCompanion<Engagement> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -1818,7 +1838,7 @@ class EngagementsCompanion extends UpdateCompanion<Engagement> {
       map['type'] = Variable<String>(type.value);
     }
     if (counterpartyId.present) {
-      map['counterparty_id'] = Variable<int>(counterpartyId.value);
+      map['counterparty_id'] = Variable<String>(counterpartyId.value);
     }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
@@ -1838,6 +1858,9 @@ class EngagementsCompanion extends UpdateCompanion<Engagement> {
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -1853,7 +1876,8 @@ class EngagementsCompanion extends UpdateCompanion<Engagement> {
           ..write('currency: $currency, ')
           ..write('notes: $notes, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -1866,16 +1890,13 @@ class $MoneyTable extends Money with TableInfo<$MoneyTable, MoneyRow> {
   $MoneyTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    clientDefault: newId,
   );
   static const VerificationMeta _dateMeta = const VerificationMeta('date');
   @override
@@ -1943,22 +1964,22 @@ class $MoneyTable extends Money with TableInfo<$MoneyTable, MoneyRow> {
     'engagementId',
   );
   @override
-  late final GeneratedColumn<int> engagementId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> engagementId = GeneratedColumn<String>(
     'engagement_id',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _personIdMeta = const VerificationMeta(
     'personId',
   );
   @override
-  late final GeneratedColumn<int> personId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
     'person_id',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _occasionTagMeta = const VerificationMeta(
@@ -2118,7 +2139,7 @@ class $MoneyTable extends Money with TableInfo<$MoneyTable, MoneyRow> {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return MoneyRow(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       date: attachedDatabase.typeMapping.read(
@@ -2146,11 +2167,11 @@ class $MoneyTable extends Money with TableInfo<$MoneyTable, MoneyRow> {
         data['${effectivePrefix}status'],
       )!,
       engagementId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}engagement_id'],
       ),
       personId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}person_id'],
       ),
       occasionTag: attachedDatabase.typeMapping.read(
@@ -2175,7 +2196,7 @@ class $MoneyTable extends Money with TableInfo<$MoneyTable, MoneyRow> {
 }
 
 class MoneyRow extends DataClass implements Insertable<MoneyRow> {
-  final int id;
+  final String id;
   final DateTime date;
 
   /// in | out
@@ -2188,8 +2209,8 @@ class MoneyRow extends DataClass implements Insertable<MoneyRow> {
 
   /// expected | actual
   final String status;
-  final int? engagementId;
-  final int? personId;
+  final String? engagementId;
+  final String? personId;
 
   /// Set when the row was created by a gift commit, so close-out can find it.
   final String? occasionTag;
@@ -2212,7 +2233,7 @@ class MoneyRow extends DataClass implements Insertable<MoneyRow> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     map['date'] = Variable<DateTime>(date);
     map['direction'] = Variable<String>(direction);
     map['amount_minor'] = Variable<int>(amountMinor);
@@ -2220,10 +2241,10 @@ class MoneyRow extends DataClass implements Insertable<MoneyRow> {
     map['label'] = Variable<String>(label);
     map['status'] = Variable<String>(status);
     if (!nullToAbsent || engagementId != null) {
-      map['engagement_id'] = Variable<int>(engagementId);
+      map['engagement_id'] = Variable<String>(engagementId);
     }
     if (!nullToAbsent || personId != null) {
-      map['person_id'] = Variable<int>(personId);
+      map['person_id'] = Variable<String>(personId);
     }
     if (!nullToAbsent || occasionTag != null) {
       map['occasion_tag'] = Variable<String>(occasionTag);
@@ -2266,15 +2287,15 @@ class MoneyRow extends DataClass implements Insertable<MoneyRow> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return MoneyRow(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       date: serializer.fromJson<DateTime>(json['date']),
       direction: serializer.fromJson<String>(json['direction']),
       amountMinor: serializer.fromJson<int>(json['amountMinor']),
       currency: serializer.fromJson<String>(json['currency']),
       label: serializer.fromJson<String>(json['label']),
       status: serializer.fromJson<String>(json['status']),
-      engagementId: serializer.fromJson<int?>(json['engagementId']),
-      personId: serializer.fromJson<int?>(json['personId']),
+      engagementId: serializer.fromJson<String?>(json['engagementId']),
+      personId: serializer.fromJson<String?>(json['personId']),
       occasionTag: serializer.fromJson<String?>(json['occasionTag']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
@@ -2284,15 +2305,15 @@ class MoneyRow extends DataClass implements Insertable<MoneyRow> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'date': serializer.toJson<DateTime>(date),
       'direction': serializer.toJson<String>(direction),
       'amountMinor': serializer.toJson<int>(amountMinor),
       'currency': serializer.toJson<String>(currency),
       'label': serializer.toJson<String>(label),
       'status': serializer.toJson<String>(status),
-      'engagementId': serializer.toJson<int?>(engagementId),
-      'personId': serializer.toJson<int?>(personId),
+      'engagementId': serializer.toJson<String?>(engagementId),
+      'personId': serializer.toJson<String?>(personId),
       'occasionTag': serializer.toJson<String?>(occasionTag),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
@@ -2300,15 +2321,15 @@ class MoneyRow extends DataClass implements Insertable<MoneyRow> {
   }
 
   MoneyRow copyWith({
-    int? id,
+    String? id,
     DateTime? date,
     String? direction,
     int? amountMinor,
     String? currency,
     String? label,
     String? status,
-    Value<int?> engagementId = const Value.absent(),
-    Value<int?> personId = const Value.absent(),
+    Value<String?> engagementId = const Value.absent(),
+    Value<String?> personId = const Value.absent(),
     Value<String?> occasionTag = const Value.absent(),
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
@@ -2402,18 +2423,19 @@ class MoneyRow extends DataClass implements Insertable<MoneyRow> {
 }
 
 class MoneyCompanion extends UpdateCompanion<MoneyRow> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<DateTime> date;
   final Value<String> direction;
   final Value<int> amountMinor;
   final Value<String> currency;
   final Value<String> label;
   final Value<String> status;
-  final Value<int?> engagementId;
-  final Value<int?> personId;
+  final Value<String?> engagementId;
+  final Value<String?> personId;
   final Value<String?> occasionTag;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
   const MoneyCompanion({
     this.id = const Value.absent(),
     this.date = const Value.absent(),
@@ -2427,6 +2449,7 @@ class MoneyCompanion extends UpdateCompanion<MoneyRow> {
     this.occasionTag = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   MoneyCompanion.insert({
     this.id = const Value.absent(),
@@ -2441,23 +2464,25 @@ class MoneyCompanion extends UpdateCompanion<MoneyRow> {
     this.occasionTag = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   }) : date = Value(date),
        direction = Value(direction),
        amountMinor = Value(amountMinor),
        label = Value(label);
   static Insertable<MoneyRow> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<DateTime>? date,
     Expression<String>? direction,
     Expression<int>? amountMinor,
     Expression<String>? currency,
     Expression<String>? label,
     Expression<String>? status,
-    Expression<int>? engagementId,
-    Expression<int>? personId,
+    Expression<String>? engagementId,
+    Expression<String>? personId,
     Expression<String>? occasionTag,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2472,22 +2497,24 @@ class MoneyCompanion extends UpdateCompanion<MoneyRow> {
       if (occasionTag != null) 'occasion_tag': occasionTag,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   MoneyCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<DateTime>? date,
     Value<String>? direction,
     Value<int>? amountMinor,
     Value<String>? currency,
     Value<String>? label,
     Value<String>? status,
-    Value<int?>? engagementId,
-    Value<int?>? personId,
+    Value<String?>? engagementId,
+    Value<String?>? personId,
     Value<String?>? occasionTag,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
   }) {
     return MoneyCompanion(
       id: id ?? this.id,
@@ -2502,6 +2529,7 @@ class MoneyCompanion extends UpdateCompanion<MoneyRow> {
       occasionTag: occasionTag ?? this.occasionTag,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -2509,7 +2537,7 @@ class MoneyCompanion extends UpdateCompanion<MoneyRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (date.present) {
       map['date'] = Variable<DateTime>(date.value);
@@ -2530,10 +2558,10 @@ class MoneyCompanion extends UpdateCompanion<MoneyRow> {
       map['status'] = Variable<String>(status.value);
     }
     if (engagementId.present) {
-      map['engagement_id'] = Variable<int>(engagementId.value);
+      map['engagement_id'] = Variable<String>(engagementId.value);
     }
     if (personId.present) {
-      map['person_id'] = Variable<int>(personId.value);
+      map['person_id'] = Variable<String>(personId.value);
     }
     if (occasionTag.present) {
       map['occasion_tag'] = Variable<String>(occasionTag.value);
@@ -2543,6 +2571,9 @@ class MoneyCompanion extends UpdateCompanion<MoneyRow> {
     }
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
     }
     return map;
   }
@@ -2561,7 +2592,8 @@ class MoneyCompanion extends UpdateCompanion<MoneyRow> {
           ..write('personId: $personId, ')
           ..write('occasionTag: $occasionTag, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -2574,16 +2606,13 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
   $NotesTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    clientDefault: newId,
   );
   static const VerificationMeta _dateMeta = const VerificationMeta('date');
   @override
@@ -2608,22 +2637,22 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
     'personId',
   );
   @override
-  late final GeneratedColumn<int> personId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
     'person_id',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _engagementIdMeta = const VerificationMeta(
     'engagementId',
   );
   @override
-  late final GeneratedColumn<int> engagementId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> engagementId = GeneratedColumn<String>(
     'engagement_id',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _tagMeta = const VerificationMeta('tag');
@@ -2741,7 +2770,7 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Note(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       date: attachedDatabase.typeMapping.read(
@@ -2753,11 +2782,11 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
         data['${effectivePrefix}text'],
       )!,
       personId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}person_id'],
       ),
       engagementId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}engagement_id'],
       ),
       tag: attachedDatabase.typeMapping.read(
@@ -2782,14 +2811,14 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, Note> {
 }
 
 class Note extends DataClass implements Insertable<Note> {
-  final int id;
+  final String id;
   final DateTime date;
 
   /// ⚠ Named `body` in Dart: a column getter called `text` collides with
   /// drift's own Table.text() builder and codegen silently emits nothing.
   final String body;
-  final int? personId;
-  final int? engagementId;
+  final String? personId;
+  final String? engagementId;
   final String? tag;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -2806,14 +2835,14 @@ class Note extends DataClass implements Insertable<Note> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
     map['date'] = Variable<DateTime>(date);
     map['text'] = Variable<String>(body);
     if (!nullToAbsent || personId != null) {
-      map['person_id'] = Variable<int>(personId);
+      map['person_id'] = Variable<String>(personId);
     }
     if (!nullToAbsent || engagementId != null) {
-      map['engagement_id'] = Variable<int>(engagementId);
+      map['engagement_id'] = Variable<String>(engagementId);
     }
     if (!nullToAbsent || tag != null) {
       map['tag'] = Variable<String>(tag);
@@ -2850,11 +2879,11 @@ class Note extends DataClass implements Insertable<Note> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Note(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
       date: serializer.fromJson<DateTime>(json['date']),
       body: serializer.fromJson<String>(json['body']),
-      personId: serializer.fromJson<int?>(json['personId']),
-      engagementId: serializer.fromJson<int?>(json['engagementId']),
+      personId: serializer.fromJson<String?>(json['personId']),
+      engagementId: serializer.fromJson<String?>(json['engagementId']),
       tag: serializer.fromJson<String?>(json['tag']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
@@ -2864,11 +2893,11 @@ class Note extends DataClass implements Insertable<Note> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
       'date': serializer.toJson<DateTime>(date),
       'body': serializer.toJson<String>(body),
-      'personId': serializer.toJson<int?>(personId),
-      'engagementId': serializer.toJson<int?>(engagementId),
+      'personId': serializer.toJson<String?>(personId),
+      'engagementId': serializer.toJson<String?>(engagementId),
       'tag': serializer.toJson<String?>(tag),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
@@ -2876,11 +2905,11 @@ class Note extends DataClass implements Insertable<Note> {
   }
 
   Note copyWith({
-    int? id,
+    String? id,
     DateTime? date,
     String? body,
-    Value<int?> personId = const Value.absent(),
-    Value<int?> engagementId = const Value.absent(),
+    Value<String?> personId = const Value.absent(),
+    Value<String?> engagementId = const Value.absent(),
     Value<String?> tag = const Value.absent(),
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
@@ -2950,14 +2979,15 @@ class Note extends DataClass implements Insertable<Note> {
 }
 
 class NotesCompanion extends UpdateCompanion<Note> {
-  final Value<int> id;
+  final Value<String> id;
   final Value<DateTime> date;
   final Value<String> body;
-  final Value<int?> personId;
-  final Value<int?> engagementId;
+  final Value<String?> personId;
+  final Value<String?> engagementId;
   final Value<String?> tag;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
   const NotesCompanion({
     this.id = const Value.absent(),
     this.date = const Value.absent(),
@@ -2967,6 +2997,7 @@ class NotesCompanion extends UpdateCompanion<Note> {
     this.tag = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   NotesCompanion.insert({
     this.id = const Value.absent(),
@@ -2977,16 +3008,18 @@ class NotesCompanion extends UpdateCompanion<Note> {
     this.tag = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   }) : date = Value(date);
   static Insertable<Note> custom({
-    Expression<int>? id,
+    Expression<String>? id,
     Expression<DateTime>? date,
     Expression<String>? body,
-    Expression<int>? personId,
-    Expression<int>? engagementId,
+    Expression<String>? personId,
+    Expression<String>? engagementId,
     Expression<String>? tag,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2997,18 +3030,20 @@ class NotesCompanion extends UpdateCompanion<Note> {
       if (tag != null) 'tag': tag,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   NotesCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
     Value<DateTime>? date,
     Value<String>? body,
-    Value<int?>? personId,
-    Value<int?>? engagementId,
+    Value<String?>? personId,
+    Value<String?>? engagementId,
     Value<String?>? tag,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
   }) {
     return NotesCompanion(
       id: id ?? this.id,
@@ -3019,6 +3054,7 @@ class NotesCompanion extends UpdateCompanion<Note> {
       tag: tag ?? this.tag,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -3026,7 +3062,7 @@ class NotesCompanion extends UpdateCompanion<Note> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (date.present) {
       map['date'] = Variable<DateTime>(date.value);
@@ -3035,10 +3071,10 @@ class NotesCompanion extends UpdateCompanion<Note> {
       map['text'] = Variable<String>(body.value);
     }
     if (personId.present) {
-      map['person_id'] = Variable<int>(personId.value);
+      map['person_id'] = Variable<String>(personId.value);
     }
     if (engagementId.present) {
-      map['engagement_id'] = Variable<int>(engagementId.value);
+      map['engagement_id'] = Variable<String>(engagementId.value);
     }
     if (tag.present) {
       map['tag'] = Variable<String>(tag.value);
@@ -3048,6 +3084,9 @@ class NotesCompanion extends UpdateCompanion<Note> {
     }
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
     }
     return map;
   }
@@ -3062,7 +3101,8 @@ class NotesCompanion extends UpdateCompanion<Note> {
           ..write('engagementId: $engagementId, ')
           ..write('tag: $tag, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -3075,26 +3115,23 @@ class $TouchesTable extends Touches with TableInfo<$TouchesTable, Touch> {
   $TouchesTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
-    hasAutoIncrement: true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
+    clientDefault: newId,
   );
   static const VerificationMeta _personIdMeta = const VerificationMeta(
     'personId',
   );
   @override
-  late final GeneratedColumn<int> personId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
     'person_id',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _dateMeta = const VerificationMeta('date');
@@ -3209,11 +3246,11 @@ class $TouchesTable extends Touches with TableInfo<$TouchesTable, Touch> {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Touch(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
       personId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}person_id'],
       )!,
       date: attachedDatabase.typeMapping.read(
@@ -3242,8 +3279,8 @@ class $TouchesTable extends Touches with TableInfo<$TouchesTable, Touch> {
 }
 
 class Touch extends DataClass implements Insertable<Touch> {
-  final int id;
-  final int personId;
+  final String id;
+  final String personId;
   final DateTime date;
   final String oneLine;
   final DateTime updatedAt;
@@ -3259,8 +3296,8 @@ class Touch extends DataClass implements Insertable<Touch> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
-    map['person_id'] = Variable<int>(personId);
+    map['id'] = Variable<String>(id);
+    map['person_id'] = Variable<String>(personId);
     map['date'] = Variable<DateTime>(date);
     map['one_line'] = Variable<String>(oneLine);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -3289,8 +3326,8 @@ class Touch extends DataClass implements Insertable<Touch> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Touch(
-      id: serializer.fromJson<int>(json['id']),
-      personId: serializer.fromJson<int>(json['personId']),
+      id: serializer.fromJson<String>(json['id']),
+      personId: serializer.fromJson<String>(json['personId']),
       date: serializer.fromJson<DateTime>(json['date']),
       oneLine: serializer.fromJson<String>(json['oneLine']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -3301,8 +3338,8 @@ class Touch extends DataClass implements Insertable<Touch> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
-      'personId': serializer.toJson<int>(personId),
+      'id': serializer.toJson<String>(id),
+      'personId': serializer.toJson<String>(personId),
       'date': serializer.toJson<DateTime>(date),
       'oneLine': serializer.toJson<String>(oneLine),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -3311,8 +3348,8 @@ class Touch extends DataClass implements Insertable<Touch> {
   }
 
   Touch copyWith({
-    int? id,
-    int? personId,
+    String? id,
+    String? personId,
     DateTime? date,
     String? oneLine,
     DateTime? updatedAt,
@@ -3365,12 +3402,13 @@ class Touch extends DataClass implements Insertable<Touch> {
 }
 
 class TouchesCompanion extends UpdateCompanion<Touch> {
-  final Value<int> id;
-  final Value<int> personId;
+  final Value<String> id;
+  final Value<String> personId;
   final Value<DateTime> date;
   final Value<String> oneLine;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
   const TouchesCompanion({
     this.id = const Value.absent(),
     this.personId = const Value.absent(),
@@ -3378,23 +3416,26 @@ class TouchesCompanion extends UpdateCompanion<Touch> {
     this.oneLine = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TouchesCompanion.insert({
     this.id = const Value.absent(),
-    required int personId,
+    required String personId,
     required DateTime date,
     this.oneLine = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   }) : personId = Value(personId),
        date = Value(date);
   static Insertable<Touch> custom({
-    Expression<int>? id,
-    Expression<int>? personId,
+    Expression<String>? id,
+    Expression<String>? personId,
     Expression<DateTime>? date,
     Expression<String>? oneLine,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3403,16 +3444,18 @@ class TouchesCompanion extends UpdateCompanion<Touch> {
       if (oneLine != null) 'one_line': oneLine,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TouchesCompanion copyWith({
-    Value<int>? id,
-    Value<int>? personId,
+    Value<String>? id,
+    Value<String>? personId,
     Value<DateTime>? date,
     Value<String>? oneLine,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
   }) {
     return TouchesCompanion(
       id: id ?? this.id,
@@ -3421,6 +3464,7 @@ class TouchesCompanion extends UpdateCompanion<Touch> {
       oneLine: oneLine ?? this.oneLine,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -3428,10 +3472,10 @@ class TouchesCompanion extends UpdateCompanion<Touch> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
     }
     if (personId.present) {
-      map['person_id'] = Variable<int>(personId.value);
+      map['person_id'] = Variable<String>(personId.value);
     }
     if (date.present) {
       map['date'] = Variable<DateTime>(date.value);
@@ -3445,6 +3489,9 @@ class TouchesCompanion extends UpdateCompanion<Touch> {
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
@@ -3456,7 +3503,8 @@ class TouchesCompanion extends UpdateCompanion<Touch> {
           ..write('date: $date, ')
           ..write('oneLine: $oneLine, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -3487,7 +3535,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
 
 typedef $$PeopleTableCreateCompanionBuilder =
     PeopleCompanion Function({
-      Value<int> id,
+      Value<String> id,
       required String name,
       Value<String?> company,
       Value<String?> waNumber,
@@ -3501,10 +3549,11 @@ typedef $$PeopleTableCreateCompanionBuilder =
       Value<String?> pingNote,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 typedef $$PeopleTableUpdateCompanionBuilder =
     PeopleCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<String> name,
       Value<String?> company,
       Value<String?> waNumber,
@@ -3518,6 +3567,7 @@ typedef $$PeopleTableUpdateCompanionBuilder =
       Value<String?> pingNote,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 
 class $$PeopleTableFilterComposer
@@ -3529,7 +3579,7 @@ class $$PeopleTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -3610,7 +3660,7 @@ class $$PeopleTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -3690,7 +3740,7 @@ class $$PeopleTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
@@ -3766,7 +3816,7 @@ class $$PeopleTableTableManager
               $$PeopleTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> company = const Value.absent(),
                 Value<String?> waNumber = const Value.absent(),
@@ -3780,6 +3830,7 @@ class $$PeopleTableTableManager
                 Value<String?> pingNote = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => PeopleCompanion(
                 id: id,
                 name: name,
@@ -3795,10 +3846,11 @@ class $$PeopleTableTableManager
                 pingNote: pingNote,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 required String name,
                 Value<String?> company = const Value.absent(),
                 Value<String?> waNumber = const Value.absent(),
@@ -3812,6 +3864,7 @@ class $$PeopleTableTableManager
                 Value<String?> pingNote = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => PeopleCompanion.insert(
                 id: id,
                 name: name,
@@ -3827,6 +3880,7 @@ class $$PeopleTableTableManager
                 pingNote: pingNote,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -3852,23 +3906,25 @@ typedef $$PeopleTableProcessedTableManager =
     >;
 typedef $$OccasionsTableCreateCompanionBuilder =
     OccasionsCompanion Function({
-      Value<int> id,
+      Value<String> id,
       required String name,
       required DateTime date,
       required String tag,
       Value<String?> country,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 typedef $$OccasionsTableUpdateCompanionBuilder =
     OccasionsCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<String> name,
       Value<DateTime> date,
       Value<String> tag,
       Value<String?> country,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 
 class $$OccasionsTableFilterComposer
@@ -3880,7 +3936,7 @@ class $$OccasionsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -3925,7 +3981,7 @@ class $$OccasionsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -3970,7 +4026,7 @@ class $$OccasionsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
@@ -4020,13 +4076,14 @@ class $$OccasionsTableTableManager
               $$OccasionsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<String> tag = const Value.absent(),
                 Value<String?> country = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => OccasionsCompanion(
                 id: id,
                 name: name,
@@ -4035,16 +4092,18 @@ class $$OccasionsTableTableManager
                 country: country,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 required String name,
                 required DateTime date,
                 required String tag,
                 Value<String?> country = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => OccasionsCompanion.insert(
                 id: id,
                 name: name,
@@ -4053,6 +4112,7 @@ class $$OccasionsTableTableManager
                 country: country,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4078,29 +4138,31 @@ typedef $$OccasionsTableProcessedTableManager =
     >;
 typedef $$EngagementsTableCreateCompanionBuilder =
     EngagementsCompanion Function({
-      Value<int> id,
+      Value<String> id,
       required String name,
       Value<String> type,
-      Value<int?> counterpartyId,
+      Value<String?> counterpartyId,
       Value<String?> status,
       Value<int?> valueMinor,
       Value<String?> currency,
       Value<String?> notes,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 typedef $$EngagementsTableUpdateCompanionBuilder =
     EngagementsCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<String> name,
       Value<String> type,
-      Value<int?> counterpartyId,
+      Value<String?> counterpartyId,
       Value<String?> status,
       Value<int?> valueMinor,
       Value<String?> currency,
       Value<String?> notes,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 
 class $$EngagementsTableFilterComposer
@@ -4112,7 +4174,7 @@ class $$EngagementsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -4127,7 +4189,7 @@ class $$EngagementsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get counterpartyId => $composableBuilder(
+  ColumnFilters<String> get counterpartyId => $composableBuilder(
     column: $table.counterpartyId,
     builder: (column) => ColumnFilters(column),
   );
@@ -4172,7 +4234,7 @@ class $$EngagementsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -4187,7 +4249,7 @@ class $$EngagementsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get counterpartyId => $composableBuilder(
+  ColumnOrderings<String> get counterpartyId => $composableBuilder(
     column: $table.counterpartyId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -4232,7 +4294,7 @@ class $$EngagementsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
@@ -4241,7 +4303,7 @@ class $$EngagementsTableAnnotationComposer
   GeneratedColumn<String> get type =>
       $composableBuilder(column: $table.type, builder: (column) => column);
 
-  GeneratedColumn<int> get counterpartyId => $composableBuilder(
+  GeneratedColumn<String> get counterpartyId => $composableBuilder(
     column: $table.counterpartyId,
     builder: (column) => column,
   );
@@ -4298,16 +4360,17 @@ class $$EngagementsTableTableManager
               $$EngagementsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> type = const Value.absent(),
-                Value<int?> counterpartyId = const Value.absent(),
+                Value<String?> counterpartyId = const Value.absent(),
                 Value<String?> status = const Value.absent(),
                 Value<int?> valueMinor = const Value.absent(),
                 Value<String?> currency = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => EngagementsCompanion(
                 id: id,
                 name: name,
@@ -4319,19 +4382,21 @@ class $$EngagementsTableTableManager
                 notes: notes,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 required String name,
                 Value<String> type = const Value.absent(),
-                Value<int?> counterpartyId = const Value.absent(),
+                Value<String?> counterpartyId = const Value.absent(),
                 Value<String?> status = const Value.absent(),
                 Value<int?> valueMinor = const Value.absent(),
                 Value<String?> currency = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => EngagementsCompanion.insert(
                 id: id,
                 name: name,
@@ -4343,6 +4408,7 @@ class $$EngagementsTableTableManager
                 notes: notes,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4371,33 +4437,35 @@ typedef $$EngagementsTableProcessedTableManager =
     >;
 typedef $$MoneyTableCreateCompanionBuilder =
     MoneyCompanion Function({
-      Value<int> id,
+      Value<String> id,
       required DateTime date,
       required String direction,
       required int amountMinor,
       Value<String> currency,
       required String label,
       Value<String> status,
-      Value<int?> engagementId,
-      Value<int?> personId,
+      Value<String?> engagementId,
+      Value<String?> personId,
       Value<String?> occasionTag,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 typedef $$MoneyTableUpdateCompanionBuilder =
     MoneyCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<DateTime> date,
       Value<String> direction,
       Value<int> amountMinor,
       Value<String> currency,
       Value<String> label,
       Value<String> status,
-      Value<int?> engagementId,
-      Value<int?> personId,
+      Value<String?> engagementId,
+      Value<String?> personId,
       Value<String?> occasionTag,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 
 class $$MoneyTableFilterComposer extends Composer<_$AppDatabase, $MoneyTable> {
@@ -4408,7 +4476,7 @@ class $$MoneyTableFilterComposer extends Composer<_$AppDatabase, $MoneyTable> {
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -4443,12 +4511,12 @@ class $$MoneyTableFilterComposer extends Composer<_$AppDatabase, $MoneyTable> {
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get engagementId => $composableBuilder(
+  ColumnFilters<String> get engagementId => $composableBuilder(
     column: $table.engagementId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get personId => $composableBuilder(
+  ColumnFilters<String> get personId => $composableBuilder(
     column: $table.personId,
     builder: (column) => ColumnFilters(column),
   );
@@ -4478,7 +4546,7 @@ class $$MoneyTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -4513,12 +4581,12 @@ class $$MoneyTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get engagementId => $composableBuilder(
+  ColumnOrderings<String> get engagementId => $composableBuilder(
     column: $table.engagementId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get personId => $composableBuilder(
+  ColumnOrderings<String> get personId => $composableBuilder(
     column: $table.personId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -4548,7 +4616,7 @@ class $$MoneyTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<DateTime> get date =>
@@ -4571,12 +4639,12 @@ class $$MoneyTableAnnotationComposer
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
 
-  GeneratedColumn<int> get engagementId => $composableBuilder(
+  GeneratedColumn<String> get engagementId => $composableBuilder(
     column: $table.engagementId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get personId =>
+  GeneratedColumn<String> get personId =>
       $composableBuilder(column: $table.personId, builder: (column) => column);
 
   GeneratedColumn<String> get occasionTag => $composableBuilder(
@@ -4619,18 +4687,19 @@ class $$MoneyTableTableManager
               $$MoneyTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<String> direction = const Value.absent(),
                 Value<int> amountMinor = const Value.absent(),
                 Value<String> currency = const Value.absent(),
                 Value<String> label = const Value.absent(),
                 Value<String> status = const Value.absent(),
-                Value<int?> engagementId = const Value.absent(),
-                Value<int?> personId = const Value.absent(),
+                Value<String?> engagementId = const Value.absent(),
+                Value<String?> personId = const Value.absent(),
                 Value<String?> occasionTag = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => MoneyCompanion(
                 id: id,
                 date: date,
@@ -4644,21 +4713,23 @@ class $$MoneyTableTableManager
                 occasionTag: occasionTag,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 required DateTime date,
                 required String direction,
                 required int amountMinor,
                 Value<String> currency = const Value.absent(),
                 required String label,
                 Value<String> status = const Value.absent(),
-                Value<int?> engagementId = const Value.absent(),
-                Value<int?> personId = const Value.absent(),
+                Value<String?> engagementId = const Value.absent(),
+                Value<String?> personId = const Value.absent(),
                 Value<String?> occasionTag = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => MoneyCompanion.insert(
                 id: id,
                 date: date,
@@ -4672,6 +4743,7 @@ class $$MoneyTableTableManager
                 occasionTag: occasionTag,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4697,25 +4769,27 @@ typedef $$MoneyTableProcessedTableManager =
     >;
 typedef $$NotesTableCreateCompanionBuilder =
     NotesCompanion Function({
-      Value<int> id,
+      Value<String> id,
       required DateTime date,
       Value<String> body,
-      Value<int?> personId,
-      Value<int?> engagementId,
+      Value<String?> personId,
+      Value<String?> engagementId,
       Value<String?> tag,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 typedef $$NotesTableUpdateCompanionBuilder =
     NotesCompanion Function({
-      Value<int> id,
+      Value<String> id,
       Value<DateTime> date,
       Value<String> body,
-      Value<int?> personId,
-      Value<int?> engagementId,
+      Value<String?> personId,
+      Value<String?> engagementId,
       Value<String?> tag,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 
 class $$NotesTableFilterComposer extends Composer<_$AppDatabase, $NotesTable> {
@@ -4726,7 +4800,7 @@ class $$NotesTableFilterComposer extends Composer<_$AppDatabase, $NotesTable> {
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
@@ -4741,12 +4815,12 @@ class $$NotesTableFilterComposer extends Composer<_$AppDatabase, $NotesTable> {
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get personId => $composableBuilder(
+  ColumnFilters<String> get personId => $composableBuilder(
     column: $table.personId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get engagementId => $composableBuilder(
+  ColumnFilters<String> get engagementId => $composableBuilder(
     column: $table.engagementId,
     builder: (column) => ColumnFilters(column),
   );
@@ -4776,7 +4850,7 @@ class $$NotesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
@@ -4791,12 +4865,12 @@ class $$NotesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get personId => $composableBuilder(
+  ColumnOrderings<String> get personId => $composableBuilder(
     column: $table.personId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get engagementId => $composableBuilder(
+  ColumnOrderings<String> get engagementId => $composableBuilder(
     column: $table.engagementId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -4826,7 +4900,7 @@ class $$NotesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<DateTime> get date =>
@@ -4835,10 +4909,10 @@ class $$NotesTableAnnotationComposer
   GeneratedColumn<String> get body =>
       $composableBuilder(column: $table.body, builder: (column) => column);
 
-  GeneratedColumn<int> get personId =>
+  GeneratedColumn<String> get personId =>
       $composableBuilder(column: $table.personId, builder: (column) => column);
 
-  GeneratedColumn<int> get engagementId => $composableBuilder(
+  GeneratedColumn<String> get engagementId => $composableBuilder(
     column: $table.engagementId,
     builder: (column) => column,
   );
@@ -4881,14 +4955,15 @@ class $$NotesTableTableManager
               $$NotesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<String> body = const Value.absent(),
-                Value<int?> personId = const Value.absent(),
-                Value<int?> engagementId = const Value.absent(),
+                Value<String?> personId = const Value.absent(),
+                Value<String?> engagementId = const Value.absent(),
                 Value<String?> tag = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => NotesCompanion(
                 id: id,
                 date: date,
@@ -4898,17 +4973,19 @@ class $$NotesTableTableManager
                 tag: tag,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
                 required DateTime date,
                 Value<String> body = const Value.absent(),
-                Value<int?> personId = const Value.absent(),
-                Value<int?> engagementId = const Value.absent(),
+                Value<String?> personId = const Value.absent(),
+                Value<String?> engagementId = const Value.absent(),
                 Value<String?> tag = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => NotesCompanion.insert(
                 id: id,
                 date: date,
@@ -4918,6 +4995,7 @@ class $$NotesTableTableManager
                 tag: tag,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4943,21 +5021,23 @@ typedef $$NotesTableProcessedTableManager =
     >;
 typedef $$TouchesTableCreateCompanionBuilder =
     TouchesCompanion Function({
-      Value<int> id,
-      required int personId,
+      Value<String> id,
+      required String personId,
       required DateTime date,
       Value<String> oneLine,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 typedef $$TouchesTableUpdateCompanionBuilder =
     TouchesCompanion Function({
-      Value<int> id,
-      Value<int> personId,
+      Value<String> id,
+      Value<String> personId,
       Value<DateTime> date,
       Value<String> oneLine,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<int> rowid,
     });
 
 class $$TouchesTableFilterComposer
@@ -4969,12 +5049,12 @@ class $$TouchesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get personId => $composableBuilder(
+  ColumnFilters<String> get personId => $composableBuilder(
     column: $table.personId,
     builder: (column) => ColumnFilters(column),
   );
@@ -5009,12 +5089,12 @@ class $$TouchesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get personId => $composableBuilder(
+  ColumnOrderings<String> get personId => $composableBuilder(
     column: $table.personId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -5049,10 +5129,10 @@ class $$TouchesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<int> get personId =>
+  GeneratedColumn<String> get personId =>
       $composableBuilder(column: $table.personId, builder: (column) => column);
 
   GeneratedColumn<DateTime> get date =>
@@ -5096,12 +5176,13 @@ class $$TouchesTableTableManager
               $$TouchesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
-                Value<int> personId = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<String> personId = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<String> oneLine = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TouchesCompanion(
                 id: id,
                 personId: personId,
@@ -5109,15 +5190,17 @@ class $$TouchesTableTableManager
                 oneLine: oneLine,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
-                required int personId,
+                Value<String> id = const Value.absent(),
+                required String personId,
                 required DateTime date,
                 Value<String> oneLine = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TouchesCompanion.insert(
                 id: id,
                 personId: personId,
@@ -5125,6 +5208,7 @@ class $$TouchesTableTableManager
                 oneLine: oneLine,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

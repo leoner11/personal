@@ -20,7 +20,7 @@ class OccasionsScreen extends StatefulWidget {
 class _OccasionsScreenState extends State<OccasionsScreen> {
   Occasion? _selected;
   String _lang = '中文';
-  final _sent = <int>{};
+  final _sent = <String>{};
 
   @override
   Widget build(BuildContext context) {

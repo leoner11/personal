@@ -20,11 +20,11 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
-  int? _selectedId;
+  String? _selectedId;
   String? _tagFilter;
   final _editor = TextEditingController();
   Timer? _debounce;
-  int? _loadedFor;
+  String? _loadedFor;
 
   @override
   void dispose() {
@@ -143,9 +143,13 @@ class _NotesScreenState extends State<NotesScreen> {
               trailing: Btn('New note',
                   variant: BtnVariant.primary,
                   onPressed: () async {
-                    final id = await widget.db
+                    // Generate the id here: insert() returns a rowid, not
+                    // the text primary key.
+                    final id = newId();
+                    await widget.db
                         .into(widget.db.notes)
                         .insert(NotesCompanion.insert(
+                          id: Value(id),
                           date: DateTime.now(),
                           tag: Value(_tagFilter),
                         ));

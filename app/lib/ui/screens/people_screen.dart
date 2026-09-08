@@ -20,10 +20,10 @@ class PeopleScreen extends StatefulWidget {
 }
 
 class _PeopleScreenState extends State<PeopleScreen> {
-  int? _selectedId;
+  String? _selectedId;
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
-  Map<int, DateTime> _lastTouch = {};
+  Map<String, DateTime> _lastTouch = {};
 
   @override
   void initState() {
@@ -263,7 +263,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        _Timeline(db: widget.db, personId: p.id),
+        _Timeline(db: widget.db, personId: p.id, onLog: _refreshTouches),
       ]),
     );
   }
@@ -356,13 +356,40 @@ class _ListRowState extends State<_ListRow> {
 
 /// Type dot colour-codes source. ⚠ The one place status colour is used
 /// non-semantically — allowed because the label sits beside it.
-class _Timeline extends StatelessWidget {
-  const _Timeline({required this.db, required this.personId});
+class _Timeline extends StatefulWidget {
+  const _Timeline(
+      {required this.db, required this.personId, required this.onLog});
   final AppDatabase db;
-  final int personId;
+  final String personId;
+  final VoidCallback onLog;
+
+  @override
+  State<_Timeline> createState() => _TimelineState();
+}
+
+class _TimelineState extends State<_Timeline> {
+  final _line = TextEditingController();
+
+  /// ⚠ ALWAYS OPTIONAL. Nothing in the app is gated on a touch existing —
+  /// this is the field most likely to be abandoned, and that is fine.
+  Future<void> _log() async {
+    final v = _line.text.trim();
+    if (v.isEmpty) return;
+    await widget.db.logTouch(widget.personId, v);
+    _line.clear();
+    widget.onLog();
+  }
+
+  @override
+  void dispose() {
+    _line.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final db = widget.db;
+    final personId = widget.personId;
     final t = AppTokens.of(context);
     return StreamBuilder<List<Touch>>(
       stream: db.watchTouches(personId),
@@ -375,6 +402,35 @@ class _Timeline extends StatelessWidget {
               Text('TIMELINE',
                   style: T.micro.copyWith(color: t.textMuted, letterSpacing: 0.5)),
               const SizedBox(height: 6),
+              Row(children: [
+                Expanded(
+                  child: SizedBox(
+                    height: D.control,
+                    child: TextField(
+                      controller: _line,
+                      onSubmitted: (_) => _log(),
+                      style: T.body.copyWith(color: t.textPrimary),
+                      cursorColor: t.accent,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: t.subtle,
+                        hintText: 'called re: quotation, said next week',
+                        hintStyle: T.body.copyWith(color: t.textMuted),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 7),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(D.radiusControl),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Btn('Log', size: BtnSize.sm, onPressed: _log),
+              ]),
+              const SizedBox(height: 8),
               if (rows.isEmpty)
                 Text('Nothing logged yet.',
                     style: T.body.copyWith(color: t.textMuted))

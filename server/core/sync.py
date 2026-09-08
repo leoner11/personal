@@ -84,10 +84,12 @@ def push(request):
                     data[f] = v
 
                 pk = row.get("id")
-                if pk:
-                    obj, _ = model.objects.update_or_create(id=pk, defaults=data)
-                else:
-                    obj = model.objects.create(**data)
+                if not pk:
+                    # ⚠ The server never mints ids. A row without one is a
+                    # client bug; skipping is safer than inventing an id that
+                    # the client will never recognise as its own.
+                    continue
+                obj, _ = model.objects.update_or_create(id=pk, defaults=data)
                 stamped[table].append(_serialize(obj, table))
 
     return JsonResponse({"tables": stamped})

@@ -75,7 +75,7 @@ class SyncEngine {
     // Newest updated_at wins. Field-level merge is not needed at one user.
     for (final row in (tables['people'] as List? ?? [])) {
       await db.into(db.people).insertOnConflictUpdate(PeopleCompanion(
-            id: Value(row['id'] as int),
+            id: Value(row['id'] as String),
             name: Value(row['name'] ?? ''),
             company: Value(_s(row['company'])),
             waNumber: Value(_s(row['wa_number'])),
