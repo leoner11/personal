@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'data/database.dart';
+import 'domain/notifications.dart';
 import 'theme/tokens.dart';
-import 'ui/people_screen.dart';
+import 'ui/shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +18,17 @@ Future<void> main() async {
     ),
     () async => windowManager.show(),
   );
-  runApp(App(db: AppDatabase()));
+  final db = AppDatabase();
+
+  // Seed three years of occasions on first launch, then rebuild every pending
+  // notification from scratch. ⚠ Both are load-bearing: an empty calendar and
+  // a wiped schedule look identical to a normal quiet day.
+  await seedIfEmpty(db);
+  final notifier = Notifier(db);
+  await notifier.init();
+  await notifier.rescheduleAll();
+
+  runApp(App(db: db));
 }
 
 class App extends StatelessWidget {
@@ -32,6 +43,6 @@ class App extends StatelessWidget {
         themeMode: ThemeMode.system,
         theme: buildTheme(Brightness.light),
         darkTheme: buildTheme(Brightness.dark),
-        home: DragToMoveArea(child: PeopleScreen(db: db)),
+        home: Shell(db: db),
       );
 }

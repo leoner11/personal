@@ -5,3 +5,6 @@ app/.flutter-plugins-dependencies
 app/macos/Pods/
 app/macos/Flutter/ephemeral/
 app/macos/Flutter/GeneratedPluginRegistrant.swift
+server/.venv/
+server/db.sqlite3
+server/**/__pycache__/

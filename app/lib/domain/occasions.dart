@@ -64,3 +64,42 @@ const kGreetings = <OccasionTag, Map<String, String>>{
     '中文': '新年快乐！祝您新的一年顺顺利利。',
   },
 };
+
+/// Three years of dates, hand-seeded. ⚠ No API can supply these.
+///
+/// ACCURACY — read before trusting a row:
+///   FIXED    Christmas, New Year, and the Chinese lunar dates (春节, 中秋节)
+///            are computed from published calendars and are reliable.
+///   ESTIMATE Lebaran and Idul Adha depend on moon sighting. Indonesia fixes
+///            Lebaran by sidang isbat 1–2 days prior; Malaysia sights
+///            separately and can differ by a day. Deepavali varies by region.
+///            These are seeded as best estimates and WILL drift by ±1–2 days.
+///            Correct them when the real announcement lands — that is the
+///            annual maintenance this app deliberately accepts.
+///
+/// Seeding three years converts a hard annual deadline into a two-year buffer.
+final kSeedOccasions = <(String, DateTime, OccasionTag, String)>[
+  // ── 2026 ──
+  ('中秋节 Mid-Autumn', DateTime(2026, 9, 25), OccasionTag.midAutumn, 'CN'),
+  ('Deepavali', DateTime(2026, 11, 8), OccasionTag.deepavali, 'MY'),
+  ('Christmas', DateTime(2026, 12, 25), OccasionTag.christmas, 'INTL'),
+  // ── 2027 ──
+  ('New Year', DateTime(2027, 1, 1), OccasionTag.newYear, 'INTL'),
+  ('春节 Chinese New Year', DateTime(2027, 2, 6), OccasionTag.cny, 'CN'),
+  ('Lebaran / Aidilfitri', DateTime(2027, 3, 9), OccasionTag.lebaran, 'ID/MY'),
+  ('Idul Adha', DateTime(2027, 5, 16), OccasionTag.idulAdha, 'ID/MY'),
+  ('中秋节 Mid-Autumn', DateTime(2027, 9, 15), OccasionTag.midAutumn, 'CN'),
+  ('Deepavali', DateTime(2027, 10, 29), OccasionTag.deepavali, 'MY'),
+  ('Christmas', DateTime(2027, 12, 25), OccasionTag.christmas, 'INTL'),
+  // ── 2028 ──
+  ('New Year', DateTime(2028, 1, 1), OccasionTag.newYear, 'INTL'),
+  ('春节 Chinese New Year', DateTime(2028, 1, 26), OccasionTag.cny, 'CN'),
+  ('Lebaran / Aidilfitri', DateTime(2028, 2, 26), OccasionTag.lebaran, 'ID/MY'),
+  ('Idul Adha', DateTime(2028, 5, 5), OccasionTag.idulAdha, 'ID/MY'),
+  ('中秋节 Mid-Autumn', DateTime(2028, 10, 3), OccasionTag.midAutumn, 'CN'),
+  ('Deepavali', DateTime(2028, 11, 15), OccasionTag.deepavali, 'MY'),
+  ('Christmas', DateTime(2028, 12, 25), OccasionTag.christmas, 'INTL'),
+  // ── 2029, so the runway warning stays quiet for a full two years ──
+  ('New Year', DateTime(2029, 1, 1), OccasionTag.newYear, 'INTL'),
+  ('春节 Chinese New Year', DateTime(2029, 2, 13), OccasionTag.cny, 'CN'),
+];
