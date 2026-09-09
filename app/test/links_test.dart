@@ -67,11 +67,87 @@ void main() {
     expect(await db.watchEngagementsForPerson(p).first, isEmpty);
   });
 
+  test('notes and money link to a person and a project, both optional', () async {
+    final p = await person('Bu Sari');
+    final e = await project('Cooljek app', personId: p);
+
+    final noteId = newId();
+    await db.into(db.notes).insert(NotesCompanion.insert(
+          id: Value(noteId),
+          date: DateTime.now(),
+          body: Value('discussed the gudang'),
+          personId: Value(p),
+          engagementId: Value(e),
+        ));
+    // An unlinked note is normal, not incomplete.
+    await db.into(db.notes).insert(NotesCompanion.insert(
+          id: Value(newId()),
+          date: DateTime.now(),
+          body: Value('random idea'),
+        ));
+
+    expect((await db.watchNotesForPerson(p).first).single.body,
+        'discussed the gudang');
+    expect((await db.watchNotesForEngagement(e).first).single.body,
+        'discussed the gudang');
+    expect((await db.watchNotes().first).length, 2);
+  });
+
+  test('clearing a link nulls it without deleting the row', () async {
+    final p = await person('Someone');
+    final id = newId();
+    await db.into(db.notes).insert(NotesCompanion.insert(
+          id: Value(id), date: DateTime.now(), personId: Value(p)));
+
+    await db.updateNote(id, const NotesCompanion(personId: Value(null)));
+
+    expect(await db.watchNotesForPerson(p).first, isEmpty);
+    expect((await db.watchNotes().first).length, 1); // row survives
+  });
+
+  test('the person timeline interleaves touches, notes and money by date',
+      () async {
+    final p = await person('Pak Andi');
+    await db.into(db.touches).insert(TouchesCompanion.insert(
+          id: Value(newId()),
+          personId: p,
+          date: DateTime(2026, 3, 20),
+          oneLine: Value('met at ZIBS mixer'),
+        ));
+    await db.into(db.notes).insert(NotesCompanion.insert(
+          id: Value(newId()),
+          date: DateTime(2026, 8, 2),
+          body: Value('mentioned expanding the gudang'),
+          personId: Value(p),
+        ));
+    await db.addMoney(MoneyCompanion.insert(
+      id: Value(newId()),
+      date: DateTime(2026, 6, 14),
+      direction: 'out',
+      amountMinor: 40000,
+      label: 'Lebaran hampers',
+      personId: Value(p),
+    ));
+
+    final entries = <TimelineEntry>[
+      for (final x in await db.watchTouches(p).first)
+        TimelineEntry(date: x.date, kind: 'touch', text: x.oneLine),
+      for (final n in await db.watchNotesForPerson(p).first)
+        TimelineEntry(date: n.date, kind: 'note', text: n.body),
+      for (final m in await db.watchMoneyForPerson(p).first)
+        TimelineEntry(
+            date: m.date, kind: 'money', direction: m.direction, text: m.label),
+    ]..sort((a, b) => b.date.compareTo(a.date));
+
+    expect(entries.map((e) => e.kind).toList(), ['note', 'money', 'touch']);
+    expect(entries.first.date, DateTime(2026, 8, 2));
+  });
+
   test('B2 ranking: value desc, then oldest touch, never-touched first', () async {
     // Mirrors the ordering used by the occasion run screen.
     final rich = await person('Rich');
     final poor = await person('Poor');
-    final never = await person('Never');
+    await person('Never');
     await project('big', personId: rich, value: 900000);
     await project('small', personId: poor, value: 100);
 

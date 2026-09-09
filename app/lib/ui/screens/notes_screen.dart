@@ -5,6 +5,7 @@ import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../theme/tokens.dart';
 import '../shell.dart';
+import '../widgets/pickers.dart';
 import '../widgets/primitives.dart';
 
 /// ⚠ DELIBERATELY MINIMAL. A textarea and a save button. No rich editor, no
@@ -25,6 +26,25 @@ class _NotesScreenState extends State<NotesScreen> {
   final _editor = TextEditingController();
   Timer? _debounce;
   String? _loadedFor;
+  Map<String, Person> _people = {};
+  Map<String, Engagement> _projects = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLookups();
+  }
+
+  Future<void> _loadLookups() async {
+    final p = await widget.db.peopleById();
+    final e = await widget.db.engagementsById();
+    if (mounted) {
+      setState(() {
+        _people = p;
+        _projects = e;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -126,7 +146,15 @@ class _NotesScreenState extends State<NotesScreen> {
                                           color: t.textPrimary,
                                           fontWeight: FontWeight.w600)),
                                   Text(
-                                      '${fmtDate(n.date)}${n.tag != null && n.tag!.isNotEmpty ? ' · ${n.tag}' : ''}',
+                                      [
+                                        fmtDate(n.date),
+                                        if (n.tag != null && n.tag!.isNotEmpty)
+                                          n.tag!,
+                                        if (_people[n.personId] != null)
+                                          _people[n.personId]!.name,
+                                        if (_projects[n.engagementId] != null)
+                                          _projects[n.engagementId]!.name,
+                                      ].join(' · '),
                                       style: T.secondary
                                           .copyWith(color: t.textSecondary)),
                                 ],
@@ -157,7 +185,37 @@ class _NotesScreenState extends State<NotesScreen> {
                   }),
               child: sel == null
                   ? const EmptyLine('Select a note.')
-                  : Panel(
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Panel(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          child: LinkBar(
+                            db: widget.db,
+                            personName: _people[sel.personId]?.name,
+                            projectName: _projects[sel.engagementId]?.name,
+                            onPerson: (p) async {
+                              await widget.db.updateNote(
+                                  sel.id,
+                                  NotesCompanion(
+                                      personId: Value(p?.id),
+                                      updatedAt: Value(DateTime.now())));
+                              await _loadLookups();
+                            },
+                            onProject: (e) async {
+                              await widget.db.updateNote(
+                                  sel.id,
+                                  NotesCompanion(
+                                      engagementId: Value(e?.id),
+                                      updatedAt: Value(DateTime.now())));
+                              await _loadLookups();
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: Panel(
                       child: TextField(
                         controller: _editor,
                         onChanged: _onChanged,
@@ -171,6 +229,9 @@ class _NotesScreenState extends State<NotesScreen> {
                           hintText: 'Write.',
                         ),
                       ),
+                          ),
+                        ),
+                      ],
                     ),
             ),
           ),

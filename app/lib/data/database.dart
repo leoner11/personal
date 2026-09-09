@@ -359,3 +359,54 @@ extension Links on AppDatabase {
   Future<void> updateEngagement(String id, EngagementsCompanion patch) =>
       (update(engagements)..where((e) => e.id.equals(id))).write(patch);
 }
+
+/// Everything attached to a person, for the unified timeline and the reverse
+/// panels. ⚠ Links are always optional — an unlinked note or money row is
+/// normal, not incomplete.
+extension MoreLinks on AppDatabase {
+  Stream<List<Note>> watchNotesForPerson(String personId) => (select(notes)
+        ..where((n) => n.deletedAt.isNull() & n.personId.equals(personId))
+        ..orderBy([(n) => OrderingTerm.desc(n.date)]))
+      .watch();
+
+  Stream<List<Note>> watchNotesForEngagement(String engagementId) =>
+      (select(notes)
+            ..where((n) =>
+                n.deletedAt.isNull() & n.engagementId.equals(engagementId))
+            ..orderBy([(n) => OrderingTerm.desc(n.date)]))
+          .watch();
+
+  Stream<List<MoneyRow>> watchMoneyForPerson(String personId) => (select(money)
+        ..where((m) => m.deletedAt.isNull() & m.personId.equals(personId))
+        ..orderBy([(m) => OrderingTerm.desc(m.date)]))
+      .watch();
+
+  Future<void> updateNote(String id, NotesCompanion patch) =>
+      (update(notes)..where((n) => n.id.equals(id))).write(patch);
+
+  Future<void> updateMoney(String id, MoneyCompanion patch) =>
+      (update(money)..where((m) => m.id.equals(id))).write(patch);
+
+  Future<Map<String, Engagement>> engagementsById() async {
+    final rows =
+        await (select(engagements)..where((e) => e.deletedAt.isNull())).get();
+    return {for (final e in rows) e.id: e};
+  }
+}
+
+/// One row on the person timeline, from whichever table it came.
+class TimelineEntry {
+  const TimelineEntry({
+    required this.date,
+    required this.kind,
+    required this.text,
+    this.direction,
+  });
+
+  final DateTime date;
+  /// touch | note | money
+  final String kind;
+  final String text;
+  /// 'in' | 'out' for money rows, null otherwise.
+  final String? direction;
+}

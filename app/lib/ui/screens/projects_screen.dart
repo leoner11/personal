@@ -4,7 +4,7 @@ import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../theme/tokens.dart';
 import '../shell.dart';
-import '../widgets/person_picker.dart';
+import '../widgets/pickers.dart';
 import '../widgets/primitives.dart';
 
 const kTypes = ['deal', 'jv', 'client', 'lead'];

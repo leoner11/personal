@@ -4,6 +4,7 @@ import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../theme/tokens.dart';
 import '../shell.dart';
+import '../widgets/pickers.dart';
 import '../widgets/primitives.dart';
 
 /// ⚠ The stated problem was "I want to know how much money we have." That is
@@ -269,6 +270,8 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
   String _cur = 'CNY';
   String _dir = 'in';
   String _status = 'expected';
+  Person? _person;
+  Engagement? _project;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +316,17 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
                       selected: _status == s,
                       onTap: () => setState(() => _status = s)),
               ]),
+              const SizedBox(height: 14),
+              Text('LINKS',
+                  style: T.micro.copyWith(color: t.textMuted, letterSpacing: 0.5)),
+              const SizedBox(height: 6),
+              LinkBar(
+                db: widget.db,
+                personName: _person?.name,
+                projectName: _project?.name,
+                onPerson: (p) => setState(() => _person = p),
+                onProject: (e) => setState(() => _project = e),
+              ),
               const SizedBox(height: 18),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 Btn('Cancel',
@@ -329,6 +343,8 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
                         ? 'untitled'
                         : _label.text.trim(),
                     status: Value(_status),
+                    personId: Value(_person?.id),
+                    engagementId: Value(_project?.id),
                   ));
                   if (context.mounted) Navigator.pop(context);
                 }),

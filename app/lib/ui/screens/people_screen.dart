@@ -460,6 +460,83 @@ class _TimelineState extends State<_Timeline> {
     super.dispose();
   }
 
+  /// ⚠ The one place status colour is used non-semantically — allowed here
+  /// because the label sits beside the dot. touch = neutral, note = info,
+  /// money = success/danger by direction.
+  Widget _entries(List<Touch> touches, AppTokens t) => StreamBuilder<List<Note>>(
+        stream: widget.db.watchNotesForPerson(widget.personId),
+        builder: (context, noteSnap) => StreamBuilder<List<MoneyRow>>(
+          stream: widget.db.watchMoneyForPerson(widget.personId),
+          builder: (context, moneySnap) {
+            final entries = <TimelineEntry>[
+              for (final x in touches)
+                TimelineEntry(date: x.date, kind: 'touch', text: x.oneLine),
+              for (final n in noteSnap.data ?? const <Note>[])
+                TimelineEntry(
+                    date: n.date,
+                    kind: 'note',
+                    text: n.body.split('\n').first.isEmpty
+                        ? 'untitled note'
+                        : n.body.split('\n').first),
+              for (final m in moneySnap.data ?? const <MoneyRow>[])
+                TimelineEntry(
+                    date: m.date,
+                    kind: 'money',
+                    direction: m.direction,
+                    text: '${fmtMoney(m.amountMinor, m.currency)} '
+                        '${m.direction} · ${m.label}'),
+            ]..sort((a, b) => b.date.compareTo(a.date));
+
+            if (entries.isEmpty) {
+              return Text('Nothing logged yet.',
+                  style: T.body.copyWith(color: t.textMuted));
+            }
+            return Column(
+              children: [
+                for (final e in entries)
+                  SizedBox(
+                    height: D.timelineRow,
+                    child: Row(children: [
+                      SizedBox(
+                        width: 62,
+                        child: Text(fmtDate(e.date),
+                            textAlign: TextAlign.right,
+                            style: T.mono.copyWith(color: t.textMuted)),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                            color: switch (e.kind) {
+                              'note' => t.info.dot,
+                              'money' => e.direction == 'in'
+                                  ? t.success.dot
+                                  : t.danger.dot,
+                              _ => t.neutral.dot,
+                            },
+                            shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 40,
+                        child: Text(e.kind,
+                            style: T.secondary.copyWith(color: t.textMuted)),
+                      ),
+                      Expanded(
+                        child: Text(e.text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: T.body.copyWith(color: t.textPrimary)),
+                      ),
+                    ]),
+                  ),
+              ],
+            );
+          },
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final db = widget.db;
@@ -505,38 +582,7 @@ class _TimelineState extends State<_Timeline> {
                 Btn('Log', size: BtnSize.sm, onPressed: _log),
               ]),
               const SizedBox(height: 8),
-              if (rows.isEmpty)
-                Text('Nothing logged yet.',
-                    style: T.body.copyWith(color: t.textMuted))
-              else
-                for (final r in rows)
-                  SizedBox(
-                    height: D.timelineRow,
-                    child: Row(children: [
-                      SizedBox(
-                        width: 62,
-                        child: Text(fmtDate(r.date),
-                            textAlign: TextAlign.right,
-                            style: T.mono.copyWith(color: t.textMuted)),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                              color: t.neutral.dot, shape: BoxShape.circle)),
-                      const SizedBox(width: 8),
-                      Text('touch',
-                          style: T.secondary.copyWith(color: t.textMuted)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(r.oneLine,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: T.body.copyWith(color: t.textPrimary)),
-                      ),
-                    ]),
-                  ),
+              _entries(rows, t),
             ],
           ),
         );
