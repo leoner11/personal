@@ -150,6 +150,7 @@ class _ProjectSheetState extends State<ProjectSheet> {
   late final _name = TextEditingController(text: widget.existing?.name ?? '');
   late final _status =
       TextEditingController(text: widget.existing?.status ?? '');
+  late final _notes = TextEditingController(text: widget.existing?.notes ?? '');
   late final _value = TextEditingController(
       text: widget.existing?.valueMinor == null
           ? ''
@@ -238,6 +239,8 @@ class _ProjectSheetState extends State<ProjectSheet> {
                   controller: _status,
                   hint: 'quotation sent / went quiet'),
               const SizedBox(height: 10),
+              Field(label: 'Notes', controller: _notes, hint: 'optional', maxLines: 3),
+              const SizedBox(height: 10),
               Field(label: 'Value', controller: _value, hint: 'optional'),
               const SizedBox(height: 8),
               Wrap(spacing: 6, children: [
@@ -248,7 +251,21 @@ class _ProjectSheetState extends State<ProjectSheet> {
                       onTap: () => setState(() => _cur = c)),
               ]),
               const SizedBox(height: 18),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              Row(children: [
+                if (editing)
+                  DeleteAction(
+                    what: 'the project "${widget.existing!.name}"',
+                    size: BtnSize.md,
+                    onConfirmed: () async {
+                      await widget.db.updateEngagement(
+                          widget.existing!.id,
+                          EngagementsCompanion(
+                              deletedAt: Value(DateTime.now()),
+                              updatedAt: Value(DateTime.now())));
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  ),
+                const Spacer(),
                 Btn('Cancel',
                     variant: BtnVariant.ghost,
                     onPressed: () => Navigator.pop(context)),
@@ -275,6 +292,7 @@ class _ProjectSheetState extends State<ProjectSheet> {
           type: Value(_type),
           counterpartyId: Value(_personId),
           status: Value(_status.text.trim()),
+          notes: Value(_notes.text.trim()),
           valueMinor: Value(valueMinor),
           currency: Value(_cur),
           updatedAt: Value(DateTime.now()),
@@ -288,6 +306,7 @@ class _ProjectSheetState extends State<ProjectSheet> {
             type: Value(_type),
             counterpartyId: Value(_personId),
             status: Value(_status.text.trim()),
+            notes: Value(_notes.text.trim()),
             valueMinor: Value(valueMinor),
             currency: Value(_cur),
           ));

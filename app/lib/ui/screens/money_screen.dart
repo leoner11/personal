@@ -153,10 +153,7 @@ class _ExpectedColumn extends StatelessWidget {
                   Text(fmtMoney(m.amountMinor, m.currency),
                       style: T.mono.copyWith(color: t.textPrimary)),
                   const SizedBox(width: 6),
-                  Btn('Confirm',
-                      size: BtnSize.sm,
-                      variant: BtnVariant.ghost,
-                      onPressed: () => db.settleMoney(m.id)),
+                  _SettleActions(db: db, row: m),
                 ]),
               ),
             Divider(color: t.line, height: 14),
@@ -176,6 +173,114 @@ class _ExpectedColumn extends StatelessWidget {
 }
 
 /// The only true table in the app.
+/// D2 — settling an expected row. ⚠ "Confirm" alone is not enough: the amount
+/// often differs, and a date that slips repeatedly is itself information
+/// (the Prawnwatch pattern). Writing off is a soft delete, never a hard one.
+class _SettleActions extends StatelessWidget {
+  const _SettleActions({required this.db, required this.row});
+  final AppDatabase db;
+  final MoneyRow row;
+
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Btn('Confirm',
+            size: BtnSize.sm,
+            variant: BtnVariant.ghost,
+            onPressed: () => db.settleMoney(row.id)),
+        Btn('Edit',
+            size: BtnSize.sm,
+            variant: BtnVariant.ghost,
+            onPressed: () => _SettleSheet.show(context, db, row)),
+        DeleteAction(
+            what: 'the expected row "${row.label}"',
+            label: 'Write off',
+            onConfirmed: () => db.updateMoney(
+                row.id,
+                MoneyCompanion(
+                    deletedAt: Value(DateTime.now()),
+                    updatedAt: Value(DateTime.now())))),
+      ]);
+}
+
+class _SettleSheet extends StatefulWidget {
+  const _SettleSheet({required this.db, required this.row});
+  final AppDatabase db;
+  final MoneyRow row;
+
+  static Future<void> show(BuildContext c, AppDatabase db, MoneyRow row) =>
+      showDialog(context: c, builder: (_) => _SettleSheet(db: db, row: row));
+
+  @override
+  State<_SettleSheet> createState() => _SettleSheetState();
+}
+
+class _SettleSheetState extends State<_SettleSheet> {
+  late final _amount = TextEditingController(
+      text: fmtMoney(widget.row.amountMinor, widget.row.currency, symbol: false));
+  late DateTime _date = widget.row.date;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    return Dialog(
+      backgroundColor: t.canvas,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(D.radiusPanel)),
+      child: SizedBox(
+        width: 420,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.row.label,
+                  style: T.entityName.copyWith(color: t.textPrimary)),
+              const SizedBox(height: 14),
+              Field(label: 'Amount', controller: _amount),
+              const SizedBox(height: 12),
+              DateField(
+                  label: 'Date',
+                  value: _date,
+                  onChanged: (d) => setState(() => _date = d)),
+              const SizedBox(height: 6),
+              Text(
+                  'Push the date to keep it expected. Confirm to make it '
+                  'actual at the amount above.',
+                  style: T.secondary.copyWith(color: t.textMuted)),
+              const SizedBox(height: 18),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                Btn('Cancel',
+                    variant: BtnVariant.ghost,
+                    onPressed: () => Navigator.pop(context)),
+                const SizedBox(width: 8),
+                Btn('Keep expected', onPressed: () async {
+                  await widget.db.updateMoney(
+                      widget.row.id,
+                      MoneyCompanion(
+                          amountMinor:
+                              Value(toMinor(_amount.text, widget.row.currency)),
+                          date: Value(_date),
+                          updatedAt: Value(DateTime.now())));
+                  if (context.mounted) Navigator.pop(context);
+                }),
+                const SizedBox(width: 8),
+                Btn('Confirm actual', variant: BtnVariant.primary,
+                    onPressed: () async {
+                  await widget.db.settleMoney(widget.row.id,
+                      amountMinor: toMinor(_amount.text, widget.row.currency),
+                      date: _date);
+                  if (context.mounted) Navigator.pop(context);
+                }),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Ledger extends StatelessWidget {
   const _Ledger({required this.rows, required this.db});
   final List<MoneyRow> rows;
@@ -272,6 +377,9 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
   String _status = 'expected';
   Person? _person;
   Engagement? _project;
+  /// ⚠ Expected money is future money. Defaulting to today and offering no
+  /// way to change it made "coming in / coming out" structurally useless.
+  DateTime _date = DateTime.now();
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +402,12 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
               Field(label: 'Label', controller: _label, hint: 'Powerline M3'),
               const SizedBox(height: 10),
               Field(label: 'Amount', controller: _amount, hint: '25000'),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
+              DateField(
+                  label: 'Date',
+                  value: _date,
+                  onChanged: (d) => setState(() => _date = d)),
+              const SizedBox(height: 12),
               Wrap(spacing: 6, children: [
                 for (final c in kCurrencies)
                   TagChip(
@@ -335,7 +448,7 @@ class _AddMoneySheetState extends State<_AddMoneySheet> {
                 const SizedBox(width: 8),
                 Btn('Save', variant: BtnVariant.primary, onPressed: () async {
                   await widget.db.addMoney(MoneyCompanion.insert(
-                    date: DateTime.now(),
+                    date: _date,
                     direction: _dir,
                     amountMinor: toMinor(_amount.text, _cur),
                     currency: Value(_cur),

@@ -33,10 +33,12 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
   Future<void> _loadRanking() async {
     final v = await widget.db.engagementValueByPerson();
     final lt = await widget.db.lastTouchByPerson();
-    if (mounted) setState(() {
-      _value = v;
-      _lastTouch = lt;
-    });
+    if (mounted) {
+      setState(() {
+        _value = v;
+        _lastTouch = lt;
+      });
+    }
   }
 
   /// ⚠ Highest-value and longest-neglected first, so if you only get through
@@ -84,6 +86,22 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
             ),
             child: Column(children: [
               const SizedBox(height: 38),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                child: Row(children: [
+                  Expanded(
+                    child: Text('UPCOMING · ${upcoming.length}',
+                        style: T.micro.copyWith(
+                            color: t.textMuted, letterSpacing: 0.5)),
+                  ),
+                  // ⚠ The runway warning tells you to add dates. It has to be
+                  // possible to add them. Estimated Lebaran / Idul Adha /
+                  // Deepavali dates also need correcting when announced.
+                  Btn('Add',
+                      size: BtnSize.sm,
+                      onPressed: () => OccasionSheet.show(context, widget.db)),
+                ]),
+              ),
               Expanded(
                 child: upcoming.isEmpty
                     ? const EmptyLine('No occasions seeded.')
@@ -93,6 +111,8 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
                             occasion: o,
                             selected: sel?.id == o.id,
                             onTap: () => setState(() => _selected = o),
+                            onEdit: () => OccasionSheet.show(context, widget.db,
+                                existing: o),
                           ),
                       ]),
               ),
@@ -192,6 +212,7 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              _CloseOut(db: widget.db, occasion: o),
               Expanded(
                 child: people.isEmpty
                     ? EmptyLine('No one tagged for ${o.name}.')
@@ -313,10 +334,14 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
 
 class _OccasionRow extends StatelessWidget {
   const _OccasionRow(
-      {required this.occasion, required this.selected, required this.onTap});
+      {required this.occasion,
+      required this.selected,
+      required this.onTap,
+      required this.onEdit});
   final Occasion occasion;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -332,17 +357,28 @@ class _OccasionRow extends StatelessWidget {
               ? Border(left: BorderSide(color: t.accent, width: 2))
               : null,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(occasion.name,
-                style: T.body.copyWith(
-                    color: t.textPrimary, fontWeight: FontWeight.w600)),
-            Text('${fmtDate(occasion.date)} · ${fmtIn(occasion.date)}',
-                style: T.secondary.copyWith(color: t.textSecondary)),
-          ],
-        ),
+        child: Row(children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(occasion.name,
+                    style: T.body.copyWith(
+                        color: t.textPrimary, fontWeight: FontWeight.w600)),
+                Text(
+                    [
+                      fmtDate(occasion.date),
+                      fmtIn(occasion.date),
+                      if ((occasion.country ?? '').isNotEmpty) occasion.country!,
+                    ].join(' · '),
+                    style: T.secondary.copyWith(color: t.textSecondary)),
+              ],
+            ),
+          ),
+          Btn('Edit',
+              size: BtnSize.sm, variant: BtnVariant.ghost, onPressed: onEdit),
+        ]),
       ),
     );
   }
@@ -412,5 +448,192 @@ class _GiftSheetState extends State<_GiftSheet> {
         ),
       ),
     );
+  }
+}
+
+
+/// B5 — occasion close-out. ⚠ Without this, expected gift rows accumulate
+/// forever and the balance silently drifts from reality. This is the single
+/// most likely way the money feature rots, and the T+1 notification already
+/// promises the screen exists.
+class _CloseOut extends StatelessWidget {
+  const _CloseOut({required this.db, required this.occasion});
+  final AppDatabase db;
+  final Occasion occasion;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    return StreamBuilder<List<MoneyRow>>(
+      stream: db.watchMoney(),
+      builder: (context, snap) {
+        final rows = (snap.data ?? const <MoneyRow>[])
+            .where((m) => m.occasionTag == occasion.tag && m.deletedAt == null)
+            .toList();
+        if (rows.isEmpty) return const SizedBox.shrink();
+
+        final expected = rows.where((m) => m.status == 'expected').toList();
+        final totals = <String, int>{};
+        for (final m in rows) {
+          totals[m.currency] = (totals[m.currency] ?? 0) + m.amountMinor;
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Text('GIFTS COMMITTED',
+                      style: T.micro
+                          .copyWith(color: t.textMuted, letterSpacing: 0.5)),
+                  const SizedBox(width: 8),
+                  Text(
+                      totals.entries
+                          .map((e) => fmtMoney(e.value, e.key))
+                          .join(' · '),
+                      style: T.body.copyWith(
+                          color: t.textPrimary, fontWeight: FontWeight.w600)),
+                  Text('  across ${rows.length} people',
+                      style: T.secondary.copyWith(color: t.textSecondary)),
+                  const Spacer(),
+                  if (expected.isNotEmpty)
+                    Btn('Confirm all ${expected.length} as spent',
+                        size: BtnSize.sm,
+                        variant: BtnVariant.primary, onPressed: () async {
+                      for (final m in expected) {
+                        await db.settleMoney(m.id);
+                      }
+                    }),
+                ]),
+                if (expected.isEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text('All confirmed as actual.',
+                      style: T.secondary.copyWith(color: t.textMuted)),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class OccasionSheet extends StatefulWidget {
+  const OccasionSheet({super.key, required this.db, this.existing});
+  final AppDatabase db;
+  final Occasion? existing;
+
+  static Future<void> show(BuildContext c, AppDatabase db, {Occasion? existing}) =>
+      showDialog(
+          context: c, builder: (_) => OccasionSheet(db: db, existing: existing));
+
+  @override
+  State<OccasionSheet> createState() => _OccasionSheetState();
+}
+
+class _OccasionSheetState extends State<OccasionSheet> {
+  late final _name = TextEditingController(text: widget.existing?.name ?? '');
+  late final _country =
+      TextEditingController(text: widget.existing?.country ?? '');
+  late DateTime _date = widget.existing?.date ?? DateTime.now();
+  late OccasionTag _tag =
+      OccasionTag.fromId(widget.existing?.tag ?? '') ?? OccasionTag.newYear;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    return Dialog(
+      backgroundColor: t.canvas,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(D.radiusPanel)),
+      child: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.existing == null ? 'Add occasion' : 'Edit occasion',
+                  style: T.screenTitle.copyWith(color: t.textPrimary)),
+              const SizedBox(height: 4),
+              Text(
+                  'Lebaran, Idul Adha and Deepavali move on sighting — correct '
+                  'the seeded estimate here once it is announced.',
+                  style: T.secondary.copyWith(color: t.textMuted)),
+              const SizedBox(height: 14),
+              Field(label: 'Name', controller: _name, hint: '春节 Chinese New Year'),
+              const SizedBox(height: 12),
+              DateField(
+                  label: 'Date',
+                  value: _date,
+                  onChanged: (d) => setState(() => _date = d),
+                  offsets: const [('+1y', 365)]),
+              const SizedBox(height: 12),
+              Text('TAG',
+                  style: T.micro.copyWith(color: t.textMuted, letterSpacing: 0.5)),
+              const SizedBox(height: 4),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final tag in OccasionTag.values)
+                  TagChip(
+                      label: tag.label,
+                      selected: _tag == tag,
+                      onTap: () => setState(() => _tag = tag)),
+              ]),
+              const SizedBox(height: 4),
+              Text('Decides who gets prompted — people carrying this tag.',
+                  style: T.secondary.copyWith(color: t.textMuted)),
+              const SizedBox(height: 12),
+              Field(label: 'Country', controller: _country, hint: 'ID/MY'),
+              const SizedBox(height: 18),
+              Row(children: [
+                if (widget.existing != null)
+                  DeleteAction(
+                    what: 'the occasion "${widget.existing!.name}"',
+                    size: BtnSize.md,
+                    onConfirmed: () async {
+                      await widget.db.softDeleteRow(
+                          widget.db.occasions, widget.existing!.id);
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  ),
+                const Spacer(),
+                Btn('Cancel',
+                    variant: BtnVariant.ghost,
+                    onPressed: () => Navigator.pop(context)),
+                const SizedBox(width: 8),
+                Btn('Save', variant: BtnVariant.primary, onPressed: _save),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    final name = _name.text.trim().isEmpty ? _tag.label : _name.text.trim();
+    if (widget.existing != null) {
+      await (widget.db.update(widget.db.occasions)
+            ..where((o) => o.id.equals(widget.existing!.id)))
+          .write(OccasionsCompanion(
+        name: Value(name),
+        date: Value(_date),
+        tag: Value(_tag.name),
+        country: Value(_country.text.trim()),
+        updatedAt: Value(DateTime.now()),
+      ));
+    } else {
+      await widget.db.into(widget.db.occasions).insert(OccasionsCompanion.insert(
+            name: name,
+            date: _date,
+            tag: _tag.name,
+            country: Value(_country.text.trim()),
+          ));
+    }
+    if (mounted) Navigator.pop(context);
   }
 }

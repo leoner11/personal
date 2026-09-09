@@ -182,7 +182,12 @@ class _PeopleScreenState extends State<PeopleScreen> {
     return ScreenBody(
       title: p.name,
       subtitle: Text(
-          [p.company, p.metWhere].where((e) => e != null && e.isNotEmpty).join(' · '),
+          [
+            p.company,
+            if (p.metWhere != null && p.metWhere!.isNotEmpty)
+              'met at ${p.metWhere}',
+            if (p.metWhen != null) fmtDate(p.metWhen!),
+          ].where((e) => e != null && e.isNotEmpty).join(' · '),
           style: T.secondary.copyWith(color: t.textSecondary)),
       trailing: Row(children: [
         if (isWa && (p.waNumber ?? '').isNotEmpty)
@@ -193,6 +198,15 @@ class _PeopleScreenState extends State<PeopleScreen> {
           Btn('Copy ID',
               variant: BtnVariant.secondary,
               onPressed: () => copyWeChatId(p.wechatId!)),
+        const SizedBox(width: 6),
+        DeleteAction(
+          what: p.name,
+          size: BtnSize.md,
+          onConfirmed: () async {
+            await widget.db.softDelete(p.id);
+            if (mounted) setState(() => _selectedId = null);
+          },
+        ),
       ]),
       child: ListView(children: [
         Panel(

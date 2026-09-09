@@ -242,3 +242,120 @@ class TagChip extends StatelessWidget {
     );
   }
 }
+
+/// Date control. A read-out plus quick offsets, because most dates in this app
+/// are "a few weeks out" rather than an exact day picked from a grid.
+class DateField extends StatelessWidget {
+  const DateField(
+      {super.key,
+      required this.label,
+      required this.value,
+      required this.onChanged,
+      this.offsets = const [('today', 0), ('+1w', 7), ('+1mo', 30), ('+3mo', 90)]});
+
+  final String label;
+  final DateTime value;
+  final ValueChanged<DateTime> onChanged;
+  final List<(String, int)> offsets;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(),
+            style: T.micro.copyWith(color: t.textMuted, letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        Row(children: [
+          Btn(_fmt(value), size: BtnSize.sm, onPressed: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: value,
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2035),
+            );
+            if (picked != null) onChanged(picked);
+          }),
+          const SizedBox(width: 8),
+          for (final (name, days) in offsets) ...[
+            TagChip(
+              label: name,
+              selected: false,
+              onTap: () {
+                final n = DateTime.now();
+                onChanged(DateTime(n.year, n.month, n.day + days));
+              },
+            ),
+            const SizedBox(width: 4),
+          ],
+        ]),
+      ],
+    );
+  }
+
+  static const _m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  static String _fmt(DateTime d) => '${d.day} ${_m[d.month - 1]} ${d.year}';
+}
+
+/// ⚠ Destructive actions are ghost + danger text, always behind a confirm.
+/// There is no filled danger button — nothing in this app is destructive
+/// enough to earn one, and every delete is soft.
+class DeleteAction extends StatelessWidget {
+  const DeleteAction(
+      {super.key,
+      required this.what,
+      required this.onConfirmed,
+      this.label = 'Delete',
+      this.size = BtnSize.sm});
+
+  final String what;
+  final Future<void> Function() onConfirmed;
+  final String label;
+  final BtnSize size;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    return Btn(label, size: size, variant: BtnVariant.ghost, onPressed: () async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (c) => Dialog(
+          backgroundColor: t.canvas,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(D.radiusPanel)),
+          child: SizedBox(
+            width: 340,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Delete $what?',
+                      style: T.entityName.copyWith(color: t.textPrimary)),
+                  const SizedBox(height: 6),
+                  Text(
+                      'It stops appearing everywhere, but the row is kept so '
+                      'the other device learns it is gone.',
+                      style: T.secondary.copyWith(color: t.textSecondary)),
+                  const SizedBox(height: 16),
+                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    Btn('Cancel',
+                        variant: BtnVariant.secondary,
+                        onPressed: () => Navigator.pop(c, false)),
+                    const SizedBox(width: 8),
+                    Btn('Delete',
+                        variant: BtnVariant.ghost,
+                        onPressed: () => Navigator.pop(c, true)),
+                  ]),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      if (ok == true) await onConfirmed();
+    });
+  }
+}

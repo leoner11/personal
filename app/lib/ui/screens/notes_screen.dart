@@ -28,11 +28,14 @@ class _NotesScreenState extends State<NotesScreen> {
   String? _loadedFor;
   Map<String, Person> _people = {};
   Map<String, Engagement> _projects = {};
+  final _tagCtl = TextEditingController();
+  Timer? _tagDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadLookups();
+    _tagCtl.addListener(_onTagChanged);
   }
 
   Future<void> _loadLookups() async {
@@ -49,11 +52,27 @@ class _NotesScreenState extends State<NotesScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _tagDebounce?.cancel();
     _editor.dispose();
+    _tagCtl.dispose();
     super.dispose();
   }
 
   /// Autosave on pause. No save button to forget.
+  void _onTagChanged() {
+    _tagDebounce?.cancel();
+    _tagDebounce = Timer(const Duration(milliseconds: 600), () {
+      final id = _selectedId;
+      if (id == null) return;
+      final v = _tagCtl.text.trim();
+      widget.db.updateNote(
+          id,
+          NotesCompanion(
+              tag: Value(v.isEmpty ? null : v),
+              updatedAt: Value(DateTime.now())));
+    });
+  }
+
   void _onChanged(String v) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 600), () {
@@ -85,6 +104,7 @@ class _NotesScreenState extends State<NotesScreen> {
         if (sel != null && _loadedFor != sel.id) {
           _loadedFor = sel.id;
           _editor.text = sel.body;
+          _tagCtl.text = sel.tag ?? '';
         }
 
         return Row(children: [
@@ -189,9 +209,47 @@ class _NotesScreenState extends State<NotesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Panel(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          child: LinkBar(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                // ⚠ The tag used to come only from the active
+                                // filter, and the filter only listed tags that
+                                // already existed — so the first tag could
+                                // never be created and tag='content' was
+                                // unreachable.
+                                SizedBox(
+                                  width: 150,
+                                  child: Field(
+                                      label: 'Tag',
+                                      controller: _tagCtl,
+                                      hint: 'content / thesis'),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: DateField(
+                                    label: 'Date',
+                                    value: sel.date,
+                                    onChanged: (d) => widget.db.updateNote(
+                                        sel.id,
+                                        NotesCompanion(
+                                            date: Value(d),
+                                            updatedAt: Value(DateTime.now()))),
+                                  ),
+                                ),
+                                DeleteAction(
+                                  what: 'this note',
+                                  onConfirmed: () async {
+                                    await widget.db.softDeleteRow(
+                                        widget.db.notes, sel.id);
+                                    if (mounted) {
+                                      setState(() => _selectedId = null);
+                                    }
+                                  },
+                                ),
+                              ]),
+                              const SizedBox(height: 10),
+                              LinkBar(
                             db: widget.db,
                             personName: _people[sel.personId]?.name,
                             projectName: _projects[sel.engagementId]?.name,
@@ -211,6 +269,8 @@ class _NotesScreenState extends State<NotesScreen> {
                                       updatedAt: Value(DateTime.now())));
                               await _loadLookups();
                             },
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 10),
