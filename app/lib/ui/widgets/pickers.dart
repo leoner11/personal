@@ -284,7 +284,7 @@ class LinkBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTokens.of(context);
-    return Row(children: [
+    return Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
       _chip(
         context,
         label: personName ?? 'Link person',
@@ -294,7 +294,6 @@ class LinkBar extends StatelessWidget {
           if (p != null) onPerson(p.id.isEmpty ? null : p);
         },
       ),
-      const SizedBox(width: 6),
       _chip(
         context,
         label: projectName ?? 'Link project',
@@ -304,7 +303,6 @@ class LinkBar extends StatelessWidget {
           if (e != null) onProject(e.id.isEmpty ? null : e);
         },
       ),
-      const Spacer(),
       if (personName != null || projectName != null)
         Text('tap to change or clear',
             style: T.secondary.copyWith(color: t.textMuted)),

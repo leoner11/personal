@@ -150,8 +150,13 @@ class _ExpectedColumn extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: T.body.copyWith(color: t.textPrimary))),
-                  Text(fmtMoney(m.amountMinor, m.currency),
-                      style: T.mono.copyWith(color: t.textPrimary)),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(fmtMoney(m.amountMinor, m.currency),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: T.mono.copyWith(color: t.textPrimary)),
+                  ),
                   const SizedBox(width: 6),
                   _SettleActions(db: db, row: m),
                 ]),
@@ -181,6 +186,8 @@ class _SettleActions extends StatelessWidget {
   final AppDatabase db;
   final MoneyRow row;
 
+  // Two inline actions only — these sit in a half-width column. Writing off
+  // lives in the sheet, which is where a destructive action belongs anyway.
   @override
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
         Btn('Confirm',
@@ -191,14 +198,6 @@ class _SettleActions extends StatelessWidget {
             size: BtnSize.sm,
             variant: BtnVariant.ghost,
             onPressed: () => _SettleSheet.show(context, db, row)),
-        DeleteAction(
-            what: 'the expected row "${row.label}"',
-            label: 'Write off',
-            onConfirmed: () => db.updateMoney(
-                row.id,
-                MoneyCompanion(
-                    deletedAt: Value(DateTime.now()),
-                    updatedAt: Value(DateTime.now())))),
       ]);
 }
 
@@ -249,7 +248,21 @@ class _SettleSheetState extends State<_SettleSheet> {
                   'actual at the amount above.',
                   style: T.secondary.copyWith(color: t.textMuted)),
               const SizedBox(height: 18),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              Row(children: [
+                DeleteAction(
+                  what: 'the expected row "${widget.row.label}"',
+                  label: 'Write off',
+                  size: BtnSize.md,
+                  onConfirmed: () async {
+                    await widget.db.updateMoney(
+                        widget.row.id,
+                        MoneyCompanion(
+                            deletedAt: Value(DateTime.now()),
+                            updatedAt: Value(DateTime.now())));
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                ),
+                const Spacer(),
                 Btn('Cancel',
                     variant: BtnVariant.ghost,
                     onPressed: () => Navigator.pop(context)),

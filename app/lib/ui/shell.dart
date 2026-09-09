@@ -263,12 +263,21 @@ class _SyncLineState extends State<_SyncLine> {
   }
 }
 
-class _Footer extends StatelessWidget {
+class _Footer extends StatefulWidget {
   const _Footer({required this.db});
   final AppDatabase db;
 
   @override
+  State<_Footer> createState() => _FooterState();
+}
+
+class _FooterState extends State<_Footer> {
+  // Held in state — an inline future re-queries on every shell rebuild.
+  late final Future<DateTime?> _runway = widget.db.calendarRunway();
+
+  @override
   Widget build(BuildContext context) {
+    final db = widget.db;
     final t = AppTokens.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 10, 12),
@@ -281,7 +290,7 @@ class _Footer extends StatelessWidget {
           // visible. Amber only once the runway is genuinely short — a
           // permanently amber line is one you stop reading.
           FutureBuilder<DateTime?>(
-            future: db.calendarRunway(),
+            future: _runway,
             builder: (context, snap) {
               final end = snap.data;
               if (end == null) {

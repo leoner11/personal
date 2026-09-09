@@ -484,29 +484,32 @@ class _CloseOut extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Text('GIFTS COMMITTED',
-                      style: T.micro
-                          .copyWith(color: t.textMuted, letterSpacing: 0.5)),
-                  const SizedBox(width: 8),
-                  Text(
-                      totals.entries
-                          .map((e) => fmtMoney(e.value, e.key))
-                          .join(' · '),
-                      style: T.body.copyWith(
-                          color: t.textPrimary, fontWeight: FontWeight.w600)),
-                  Text('  across ${rows.length} people',
-                      style: T.secondary.copyWith(color: t.textSecondary)),
-                  const Spacer(),
-                  if (expected.isNotEmpty)
-                    Btn('Confirm all ${expected.length} as spent',
-                        size: BtnSize.sm,
-                        variant: BtnVariant.primary, onPressed: () async {
-                      for (final m in expected) {
-                        await db.settleMoney(m.id);
-                      }
-                    }),
-                ]),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text('GIFTS COMMITTED',
+                        style: T.micro
+                            .copyWith(color: t.textMuted, letterSpacing: 0.5)),
+                    Text(
+                        totals.entries
+                            .map((e) => fmtMoney(e.value, e.key))
+                            .join(' · '),
+                        style: T.body.copyWith(
+                            color: t.textPrimary, fontWeight: FontWeight.w600)),
+                    Text('across ${rows.length} people',
+                        style: T.secondary.copyWith(color: t.textSecondary)),
+                    if (expected.isNotEmpty)
+                      Btn('Confirm all ${expected.length} as spent',
+                          size: BtnSize.sm,
+                          variant: BtnVariant.primary, onPressed: () async {
+                        for (final m in expected) {
+                          await db.settleMoney(m.id);
+                        }
+                      }),
+                  ],
+                ),
                 if (expected.isEmpty) ...[
                   const SizedBox(height: 4),
                   Text('All confirmed as actual.',

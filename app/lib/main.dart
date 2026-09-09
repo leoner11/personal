@@ -10,8 +10,11 @@ Future<void> main() async {
   await windowManager.ensureInitialized();
   await windowManager.waitUntilReadyToShow(
     const WindowOptions(
-      size: Size(900, 620),
-      minimumSize: Size(720, 480),
+      // 200 sidebar + 300 list + 420 detail minimum = 920 of content.
+      // The old 720 minimum squeezed the detail pane below its own spec and
+      // made fixed-width control rows overflow.
+      size: Size(1180, 760),
+      minimumSize: Size(960, 600),
       title: 'Personal CRM',
       titleBarStyle: TitleBarStyle.hidden,
       backgroundColor: Colors.transparent,

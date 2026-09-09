@@ -212,33 +212,22 @@ class _NotesScreenState extends State<NotesScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(children: [
+                              Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                                 // ⚠ The tag used to come only from the active
                                 // filter, and the filter only listed tags that
                                 // already existed — so the first tag could
                                 // never be created and tag='content' was
                                 // unreachable.
-                                SizedBox(
-                                  width: 150,
+                                Expanded(
                                   child: Field(
                                       label: 'Tag',
                                       controller: _tagCtl,
                                       hint: 'content / thesis'),
                                 ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: DateField(
-                                    label: 'Date',
-                                    value: sel.date,
-                                    onChanged: (d) => widget.db.updateNote(
-                                        sel.id,
-                                        NotesCompanion(
-                                            date: Value(d),
-                                            updatedAt: Value(DateTime.now()))),
-                                  ),
-                                ),
+                                const SizedBox(width: 8),
                                 DeleteAction(
                                   what: 'this note',
+                                  size: BtnSize.md,
                                   onConfirmed: () async {
                                     await widget.db.softDeleteRow(
                                         widget.db.notes, sel.id);
@@ -248,7 +237,17 @@ class _NotesScreenState extends State<NotesScreen> {
                                   },
                                 ),
                               ]),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 12),
+                              DateField(
+                                label: 'Date',
+                                value: sel.date,
+                                onChanged: (d) => widget.db.updateNote(
+                                    sel.id,
+                                    NotesCompanion(
+                                        date: Value(d),
+                                        updatedAt: Value(DateTime.now()))),
+                              ),
+                              const SizedBox(height: 12),
                               LinkBar(
                             db: widget.db,
                             personName: _people[sel.personId]?.name,

@@ -11,26 +11,40 @@ const kTypes = ['deal', 'jv', 'client', 'lead'];
 
 /// ⚠ Grouped by type, NOT a pipeline. Ralali is a jv, not a deal — that
 /// distinction is the entire reason this table exists.
-class ProjectsScreen extends StatelessWidget {
+class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({super.key, required this.db});
   final AppDatabase db;
 
   @override
+  State<ProjectsScreen> createState() => _ProjectsScreenState();
+}
+
+class _ProjectsScreenState extends State<ProjectsScreen> {
+  // Held in state; an inline future re-queries on every stream tick.
+  late Future<Map<String, Person>> _people = widget.db.peopleById();
+
+  @override
   Widget build(BuildContext context) {
+    final db = widget.db;
     final t = AppTokens.of(context);
     return StreamBuilder<List<Engagement>>(
       stream: db.watchEngagements(),
       builder: (context, snap) {
         final rows = snap.data ?? const <Engagement>[];
         return FutureBuilder<Map<String, Person>>(
-          future: db.peopleById(),
+          future: _people,
           builder: (context, peopleSnap) {
             final byId = peopleSnap.data ?? const <String, Person>{};
             return ScreenBody(
               title: 'Projects',
               trailing: Btn('Add project',
                   variant: BtnVariant.primary,
-                  onPressed: () => ProjectSheet.show(context, db)),
+                  onPressed: () async {
+                    await ProjectSheet.show(context, db);
+                    if (mounted) {
+                      setState(() => _people = db.peopleById());
+                    }
+                  }),
               child: rows.isEmpty
                   ? const EmptyLine('Nothing here yet.')
                   : ListView(children: [

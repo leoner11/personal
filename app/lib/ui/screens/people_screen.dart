@@ -239,27 +239,25 @@ class _PeopleScreenState extends State<PeopleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                Text('PING',
-                    style: T.micro
-                        .copyWith(color: t.textMuted, letterSpacing: 0.5)),
-                const Spacer(),
+              Text('PING',
+                  style:
+                      T.micro.copyWith(color: t.textMuted, letterSpacing: 0.5)),
+              const SizedBox(height: 4),
+              Wrap(spacing: 4, runSpacing: 4, children: [
                 for (final (label, months) in const [
                   ('1 mo', 1),
                   ('3 mo', 3),
                   ('6 mo', 6),
                   ('12 mo', 12)
-                ]) ...[
+                ])
                   Btn(label,
                       size: BtnSize.sm,
-                      variant: BtnVariant.ghost,
+                      variant: BtnVariant.secondary,
                       onPressed: () {
                         final n = DateTime.now();
                         widget.db.setPing(
                             p.id, DateTime(n.year, n.month + months, n.day));
                       }),
-                  const SizedBox(width: 2),
-                ],
                 if (p.pingDate != null)
                   Btn('Clear',
                       size: BtnSize.sm,

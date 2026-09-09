@@ -267,7 +267,9 @@ class DateField extends StatelessWidget {
         Text(label.toUpperCase(),
             style: T.micro.copyWith(color: t.textMuted, letterSpacing: 0.5)),
         const SizedBox(height: 4),
-        Row(children: [
+        // ⚠ Wrap, not Row. These are fixed-width children that cannot shrink,
+        // so a Row overflows the moment the pane is narrow.
+        Wrap(spacing: 6, runSpacing: 6, children: [
           Btn(_fmt(value), size: BtnSize.sm, onPressed: () async {
             final picked = await showDatePicker(
               context: context,
@@ -277,8 +279,7 @@ class DateField extends StatelessWidget {
             );
             if (picked != null) onChanged(picked);
           }),
-          const SizedBox(width: 8),
-          for (final (name, days) in offsets) ...[
+          for (final (name, days) in offsets)
             TagChip(
               label: name,
               selected: false,
@@ -287,8 +288,6 @@ class DateField extends StatelessWidget {
                 onChanged(DateTime(n.year, n.month, n.day + days));
               },
             ),
-            const SizedBox(width: 4),
-          ],
         ]),
       ],
     );

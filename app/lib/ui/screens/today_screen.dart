@@ -9,7 +9,7 @@ import '../widgets/primitives.dart';
 /// Do not add streaks, suggestions, "people you haven't contacted", or any
 /// filler to make this screen look busy. Engagement is not a goal for a tool
 /// with one user — the notification is the delivery mechanism, not this screen.
-class TodayScreen extends StatelessWidget {
+class TodayScreen extends StatefulWidget {
   const TodayScreen(
       {super.key, required this.db, required this.onCount, required this.onGo});
   final AppDatabase db;
@@ -17,16 +17,31 @@ class TodayScreen extends StatelessWidget {
   final ValueChanged<Section> onGo;
 
   @override
+  State<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends State<TodayScreen> {
+  /// ⚠ Held in state, NEVER created in build. Building the future inline made
+  /// every rebuild start a fresh set of queries, and because reporting the
+  /// count rebuilds the shell, that rebuilt this screen — an endless loop of
+  /// database reads that never settled.
+  late Future<_TodayData> _future = _loadToday(widget.db);
+
+  void _refresh() => setState(() => _future = _loadToday(widget.db));
+
+  @override
   Widget build(BuildContext context) {
+    final db = widget.db;
+    final onGo = widget.onGo;
     final t = AppTokens.of(context);
     return ScreenBody(
       title: 'Today',
       child: FutureBuilder<_TodayData>(
-        future: _load(db),
+        future: _future,
         builder: (context, snap) {
           final d = snap.data;
           if (d == null) return const SizedBox.shrink();
-          onCount(d.count);
+          widget.onCount(d.count);
 
           final blocks = <Widget>[];
 
@@ -136,16 +151,20 @@ class TodayScreen extends StatelessWidget {
                       Btn('+3 mo',
                           size: BtnSize.sm,
                           variant: BtnVariant.ghost,
-                          onPressed: () {
+                          onPressed: () async {
                             final n = DateTime.now();
-                            db.setPing(
+                            await db.setPing(
                                 p.id, DateTime(n.year, n.month + 3, n.day));
+                            _refresh();
                           }),
                       const SizedBox(width: 4),
                       Btn('Dismiss',
                           size: BtnSize.sm,
                           variant: BtnVariant.ghost,
-                          onPressed: () => db.setPing(p.id, null)),
+                          onPressed: () async {
+                            await db.setPing(p.id, null);
+                            _refresh();
+                          }),
                     ]),
                   ),
                 ),
@@ -184,7 +203,10 @@ class TodayScreen extends StatelessWidget {
                       Btn('Confirm',
                           size: BtnSize.sm,
                           variant: BtnVariant.ghost,
-                          onPressed: () => db.settleMoney(m.id)),
+                          onPressed: () async {
+                            await db.settleMoney(m.id);
+                            _refresh();
+                          }),
                     ]),
                   ),
                 ),
@@ -200,44 +222,45 @@ class TodayScreen extends StatelessWidget {
     );
   }
 
-  static Future<_TodayData> _load(AppDatabase db) async {
-    final now = DateTime.now();
-    final occ = await db.upcomingOccasions(withinDays: 14);
-    final people = await db.watchPeople().first;
-    final pings = people
-        .where((p) =>
-            p.pingDate != null &&
-            p.pingDate!.isBefore(now.add(const Duration(days: 1))))
-        .toList();
-    final moneyRows = await db.watchMoney().first;
-    final settle = moneyRows
-        .where((m) =>
-            m.status == 'expected' &&
-            m.date.isBefore(now.add(const Duration(days: 1))))
-        .toList();
+}
 
-    final counts = <String, int>{};
-    for (final o in occ) {
-      counts[o.tag] =
-          people.where((p) => p.occasionTags.contains(o.tag)).length;
-    }
+Future<_TodayData> _loadToday(AppDatabase db) async {
+  final now = DateTime.now();
+  final occ = await db.upcomingOccasions(withinDays: 14);
+  final people = await db.watchPeople().first;
+  final pings = people
+      .where((p) =>
+          p.pingDate != null &&
+          p.pingDate!.isBefore(now.add(const Duration(days: 1))))
+      .toList();
+  final moneyRows = await db.watchMoney().first;
+  final settle = moneyRows
+      .where((m) =>
+          m.status == 'expected' &&
+          m.date.isBefore(now.add(const Duration(days: 1))))
+      .toList();
 
-    final runway = await db.calendarRunway();
-    String? warn;
-    if (runway == null) {
-      warn = 'Occasion calendar is empty — nothing will ever fire.';
-    } else if (runway.difference(now).inDays < 365) {
-      warn = 'Occasion calendar ends ${fmtDate(runway)} — add more dates.';
-    }
-
-    return _TodayData(
-      occasions: occ,
-      pings: pings,
-      settle: settle,
-      taggedCounts: counts,
-      runwayWarning: warn,
-    );
+  final counts = <String, int>{};
+  for (final o in occ) {
+    counts[o.tag] =
+        people.where((p) => p.occasionTags.contains(o.tag)).length;
   }
+
+  final runway = await db.calendarRunway();
+  String? warn;
+  if (runway == null) {
+    warn = 'Occasion calendar is empty — nothing will ever fire.';
+  } else if (runway.difference(now).inDays < 365) {
+    warn = 'Occasion calendar ends ${fmtDate(runway)} — add more dates.';
+  }
+
+  return _TodayData(
+    occasions: occ,
+    pings: pings,
+    settle: settle,
+    taggedCounts: counts,
+    runwayWarning: warn,
+  );
 }
 
 class _TodayData {
