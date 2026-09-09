@@ -21,6 +21,42 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
   Occasion? _selected;
   String _lang = '中文';
   final _sent = <String>{};
+  Map<String, int> _value = {};
+  Map<String, DateTime> _lastTouch = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRanking();
+  }
+
+  Future<void> _loadRanking() async {
+    final v = await widget.db.engagementValueByPerson();
+    final lt = await widget.db.lastTouchByPerson();
+    if (mounted) setState(() {
+      _value = v;
+      _lastTouch = lt;
+    });
+  }
+
+  /// ⚠ Highest-value and longest-neglected first, so if you only get through
+  /// half the list it was the right half. Requires the counterparty link —
+  /// without it every person ranks zero and this degrades to last-touch order.
+  List<Person> _ranked(List<Person> rows) {
+    final out = [...rows];
+    out.sort((a, b) {
+      final va = _value[a.id] ?? 0;
+      final vb = _value[b.id] ?? 0;
+      if (va != vb) return vb.compareTo(va);
+      final ta = _lastTouch[a.id];
+      final tb = _lastTouch[b.id];
+      if (ta == null && tb == null) return a.name.compareTo(b.name);
+      if (ta == null) return -1; // never touched sorts first
+      if (tb == null) return 1;
+      return ta.compareTo(tb); // oldest touch first
+    });
+    return out;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +148,7 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
     return StreamBuilder<List<Person>>(
       stream: widget.db.watchByTag(o.tag),
       builder: (context, snap) {
-        final people = snap.data ?? const <Person>[];
+        final people = _ranked(snap.data ?? const <Person>[]);
         final wa = people.where((p) => channelFrom(p.preferredChannel) == Channel.wa).toList();
         final wc = people.where((p) => channelFrom(p.preferredChannel) == Channel.wechat).toList();
         final done = people.where((p) => _sent.contains(p.id)).length;

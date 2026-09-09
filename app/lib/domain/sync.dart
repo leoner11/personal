@@ -55,7 +55,10 @@ class SyncEngine {
       'tables': {
         'people': (await db.select(db.people).get()).map(_person).toList(),
         'occasions': (await db.select(db.occasions).get()).map(_occasion).toList(),
+        'engagements':
+            (await db.select(db.engagements).get()).map(_engagement).toList(),
         'money': (await db.select(db.money).get()).map(_money).toList(),
+        'notes': (await db.select(db.notes).get()).map(_note).toList(),
         'touches': (await db.select(db.touches).get()).map(_touch).toList(),
       }
     };
@@ -94,6 +97,74 @@ class SyncEngine {
             deletedAt: Value(_d(row['deleted_at'])),
           ));
     }
+    for (final row in (tables['occasions'] as List? ?? [])) {
+      await db.into(db.occasions).insertOnConflictUpdate(OccasionsCompanion(
+            id: Value(row['id'] as String),
+            name: Value(row['name'] ?? ''),
+            date: Value(_d(row['date']) ?? DateTime.now()),
+            tag: Value(row['tag'] ?? ''),
+            country: Value(_s(row['country'])),
+            updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
+            deletedAt: Value(_d(row['deleted_at'])),
+          ));
+    }
+
+    for (final row in (tables['engagements'] as List? ?? [])) {
+      await db.into(db.engagements).insertOnConflictUpdate(EngagementsCompanion(
+            id: Value(row['id'] as String),
+            name: Value(row['name'] ?? ''),
+            type: Value(row['type'] ?? 'deal'),
+            counterpartyId: Value(_s(row['counterparty_id'])),
+            status: Value(_s(row['status'])),
+            valueMinor: Value(row['value_minor'] as int?),
+            currency: Value(_s(row['currency'])),
+            notes: Value(_s(row['notes'])),
+            updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
+            deletedAt: Value(_d(row['deleted_at'])),
+          ));
+    }
+
+    for (final row in (tables['money'] as List? ?? [])) {
+      await db.into(db.money).insertOnConflictUpdate(MoneyCompanion(
+            id: Value(row['id'] as String),
+            date: Value(_d(row['date']) ?? DateTime.now()),
+            direction: Value(row['direction'] ?? 'out'),
+            amountMinor: Value(row['amount_minor'] as int? ?? 0),
+            currency: Value(row['currency'] ?? 'CNY'),
+            label: Value(row['label'] ?? ''),
+            status: Value(row['status'] ?? 'expected'),
+            engagementId: Value(_s(row['engagement_id'])),
+            personId: Value(_s(row['person_id'])),
+            occasionTag: Value(_s(row['occasion_tag'])),
+            updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
+            deletedAt: Value(_d(row['deleted_at'])),
+          ));
+    }
+
+    for (final row in (tables['notes'] as List? ?? [])) {
+      await db.into(db.notes).insertOnConflictUpdate(NotesCompanion(
+            id: Value(row['id'] as String),
+            date: Value(_d(row['date']) ?? DateTime.now()),
+            body: Value(row['text'] ?? ''),
+            personId: Value(_s(row['person_id'])),
+            engagementId: Value(_s(row['engagement_id'])),
+            tag: Value(_s(row['tag'])),
+            updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
+            deletedAt: Value(_d(row['deleted_at'])),
+          ));
+    }
+
+    for (final row in (tables['touches'] as List? ?? [])) {
+      await db.into(db.touches).insertOnConflictUpdate(TouchesCompanion(
+            id: Value(row['id'] as String),
+            personId: Value(row['person_id'] ?? ''),
+            date: Value(_d(row['date']) ?? DateTime.now()),
+            oneLine: Value(row['one_line'] ?? ''),
+            updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
+            deletedAt: Value(_d(row['deleted_at'])),
+          ));
+    }
+
     return data['server_time'] as String?;
   }
 
@@ -125,6 +196,28 @@ class SyncEngine {
         'tag': o.tag,
         'country': o.country ?? '',
         'deleted_at': o.deletedAt?.toIso8601String(),
+      };
+
+  Map<String, dynamic> _engagement(Engagement e) => {
+        'id': e.id,
+        'name': e.name,
+        'type': e.type,
+        'counterparty_id': e.counterpartyId ?? '',
+        'status': e.status ?? '',
+        'value_minor': e.valueMinor,
+        'currency': e.currency ?? '',
+        'notes': e.notes ?? '',
+        'deleted_at': e.deletedAt?.toIso8601String(),
+      };
+
+  Map<String, dynamic> _note(Note n) => {
+        'id': n.id,
+        'date': n.date.toIso8601String(),
+        'text': n.body,
+        'person_id': n.personId ?? '',
+        'engagement_id': n.engagementId ?? '',
+        'tag': n.tag ?? '',
+        'deleted_at': n.deletedAt?.toIso8601String(),
       };
 
   Map<String, dynamic> _money(MoneyRow m) => {

@@ -7,6 +7,7 @@ import '../../domain/occasions.dart';
 import '../../theme/tokens.dart';
 import '../add_person_sheet.dart';
 import '../shell.dart';
+import 'projects_screen.dart';
 import '../widgets/primitives.dart';
 
 /// Grouped by last touch. Detail is header + tags + ping + timeline —
@@ -263,6 +264,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        _LinkedProjects(db: widget.db, person: p),
+        const SizedBox(height: 12),
         _Timeline(db: widget.db, personId: p.id, onLog: _refreshTouches),
       ]),
     );
@@ -350,6 +353,77 @@ class _ListRowState extends State<_ListRow> {
           ]),
         ),
       ),
+    );
+  }
+}
+
+/// The other half of the counterparty link: what this person is actually
+/// involved in. Without this the link is write-only.
+class _LinkedProjects extends StatelessWidget {
+  const _LinkedProjects({required this.db, required this.person});
+  final AppDatabase db;
+  final Person person;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    return StreamBuilder<List<Engagement>>(
+      stream: db.watchEngagementsForPerson(person.id),
+      builder: (context, snap) {
+        final rows = snap.data ?? const <Engagement>[];
+        return Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Text('PROJECTS',
+                    style: T.micro
+                        .copyWith(color: t.textMuted, letterSpacing: 0.5)),
+                const Spacer(),
+                Btn('Link new',
+                    size: BtnSize.sm,
+                    variant: BtnVariant.ghost,
+                    onPressed: () =>
+                        ProjectSheet.show(context, db, presetPerson: person)),
+              ]),
+              const SizedBox(height: 6),
+              if (rows.isEmpty)
+                Text('Nothing linked.',
+                    style: T.body.copyWith(color: t.textMuted))
+              else
+                for (final e in rows)
+                  GestureDetector(
+                    onTap: () => ProjectSheet.show(context, db, existing: e),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: SizedBox(
+                        height: D.timelineRow,
+                        child: Row(children: [
+                          SizedBox(
+                            width: 52,
+                            child: Text(e.type,
+                                style: T.secondary
+                                    .copyWith(color: t.textMuted)),
+                          ),
+                          Expanded(
+                            child: Text(
+                                [e.name, if ((e.status ?? '').isNotEmpty) e.status!]
+                                    .join(' — '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: T.body.copyWith(color: t.textPrimary)),
+                          ),
+                          if (e.valueMinor != null)
+                            Text(fmtMoney(e.valueMinor!, e.currency ?? 'CNY'),
+                                style: T.mono.copyWith(color: t.textMuted)),
+                        ]),
+                      ),
+                    ),
+                  ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

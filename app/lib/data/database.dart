@@ -323,3 +323,39 @@ extension Queries on AppDatabase {
         updates: {table},
       );
 }
+
+/// Person <-> engagement links. The counterparty field is what makes a project
+/// row mean something on its own — "NaraHome ERP" without a person attached is
+/// a name, not a relationship.
+extension Links on AppDatabase {
+  Stream<List<Engagement>> watchEngagementsForPerson(String personId) =>
+      (select(engagements)
+            ..where((e) =>
+                e.deletedAt.isNull() & e.counterpartyId.equals(personId)))
+          .watch();
+
+  Future<Map<String, Person>> peopleById() async {
+    final rows = await (select(people)..where((p) => p.deletedAt.isNull())).get();
+    return {for (final p in rows) p.id: p};
+  }
+
+  /// B2 sorts by engagement value desc, then last touch asc — highest-value
+  /// and longest-neglected first, so if you only get through half the list it
+  /// was the right half. Currency is ignored for ordering: mixing rates in
+  /// would need an FX source, and relative order is all that matters here.
+  Future<Map<String, int>> engagementValueByPerson() async {
+    final rows = await (select(engagements)
+          ..where((e) => e.deletedAt.isNull() & e.counterpartyId.isNotNull()))
+        .get();
+    final out = <String, int>{};
+    for (final e in rows) {
+      final id = e.counterpartyId;
+      if (id == null || id.isEmpty) continue;
+      out[id] = (out[id] ?? 0) + (e.valueMinor ?? 0);
+    }
+    return out;
+  }
+
+  Future<void> updateEngagement(String id, EngagementsCompanion patch) =>
+      (update(engagements)..where((e) => e.id.equals(id))).write(patch);
+}
