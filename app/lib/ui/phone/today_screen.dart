@@ -27,7 +27,14 @@ class _PhoneTodayScreenState extends State<PhoneTodayScreen> {
   /// future created in build() restarts every query on every rebuild.
   late Future<TodayData> _future = loadToday(widget.db);
 
-  void _refresh() => setState(() => _future = loadToday(widget.db));
+  // ⚠ Block body, not an arrow. `setState(() => _future = ...)` returns the
+  // assigned Future from the callback, and Flutter asserts on that:
+  // "setState() callback argument returned a Future."
+  void _refresh() {
+    setState(() {
+      _future = loadToday(widget.db);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -122,10 +122,10 @@ class Notifier {
       // T-14 — the whole point. Gifts need lead time; a same-day
       // notification is useless and was the original complaint.
       n += await _at(notificationId(o.id, 1), o.date.subtract(const Duration(days: 14)),
-          '${o.name} in 2 weeks', '$tagged people tagged');
+          '${o.name} in 2 weeks', _tagged(tagged));
       // T-3 — second pass for anyone still unmarked.
       n += await _at(notificationId(o.id, 2), o.date.subtract(const Duration(days: 3)),
-          '${o.name} in 3 days', '$tagged people tagged');
+          '${o.name} in 3 days', _tagged(tagged));
       // T+1 — close-out. ⚠ Without this, expected rows accumulate forever and
       // the balance silently drifts from reality.
       n += await _at(notificationId(o.id, 3), o.date.add(const Duration(days: 1)),
@@ -175,6 +175,10 @@ class Notifier {
   Future<int> pendingCount() async =>
       (await _plugin.pendingNotificationRequests()).length;
 }
+
+/// ⚠ This string is the notification body — the text actually read, on a lock
+/// screen, months from now. "1 people tagged" is a tell that nobody ever looked.
+String _tagged(int n) => '$n ${n == 1 ? 'person' : 'people'} tagged';
 
 /// Seeds the occasion calendar if it is empty. ⚠ Three years, not one.
 Future<void> seedIfEmpty(AppDatabase db) async {

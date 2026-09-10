@@ -43,6 +43,31 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- ⛔ THESE RECEIVERS ARE LOAD-BEARING AND THE PLUGIN DOES NOT SUPPLY
+             THEM. flutter_local_notifications' own manifest declares only
+             permissions, so without these the alarm fires, AlarmManager counts
+             the wakeup, and the broadcast lands on nothing. No notification, no
+             error, no log — the exact silent failure this app is built to
+             avoid, since an armed-but-dead schedule is indistinguishable from a
+             quiet month.
+
+             Observed before the fix: 18 alarms scheduled, "18 wakes 18 alarms"
+             in dumpsys, zero notifications posted and no channel ever created.
+
+             ScheduledNotificationBootReceiver re-arms pending alarms after a
+             reboot, which the 11 Sep canary exists to test. -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

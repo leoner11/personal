@@ -28,7 +28,14 @@ class _TodayScreenState extends State<TodayScreen> {
   /// database reads that never settled.
   late Future<TodayData> _future = loadToday(widget.db);
 
-  void _refresh() => setState(() => _future = loadToday(widget.db));
+  // ⚠ Block body, not an arrow. `setState(() => _future = ...)` returns the
+  // assigned Future from the callback, and Flutter asserts on that:
+  // "setState() callback argument returned a Future."
+  void _refresh() {
+    setState(() {
+      _future = loadToday(widget.db);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
