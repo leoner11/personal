@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
+import '../../domain/today.dart';
 import '../../theme/tokens.dart';
 import '../shell.dart';
 import '../widgets/primitives.dart';
@@ -25,9 +26,9 @@ class _TodayScreenState extends State<TodayScreen> {
   /// every rebuild start a fresh set of queries, and because reporting the
   /// count rebuilds the shell, that rebuilt this screen — an endless loop of
   /// database reads that never settled.
-  late Future<_TodayData> _future = _loadToday(widget.db);
+  late Future<TodayData> _future = loadToday(widget.db);
 
-  void _refresh() => setState(() => _future = _loadToday(widget.db));
+  void _refresh() => setState(() => _future = loadToday(widget.db));
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +37,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final t = AppTokens.of(context);
     return ScreenBody(
       title: 'Today',
-      child: FutureBuilder<_TodayData>(
+      child: FutureBuilder<TodayData>(
         future: _future,
         builder: (context, snap) {
           final d = snap.data;
@@ -222,63 +223,6 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
-}
-
-Future<_TodayData> _loadToday(AppDatabase db) async {
-  final now = DateTime.now();
-  final occ = await db.upcomingOccasions(withinDays: 14);
-  final people = await db.watchPeople().first;
-  final pings = people
-      .where((p) =>
-          p.pingDate != null &&
-          p.pingDate!.isBefore(now.add(const Duration(days: 1))))
-      .toList();
-  final moneyRows = await db.watchMoney().first;
-  final settle = moneyRows
-      .where((m) =>
-          m.status == 'expected' &&
-          m.date.isBefore(now.add(const Duration(days: 1))))
-      .toList();
-
-  final counts = <String, int>{};
-  for (final o in occ) {
-    counts[o.tag] =
-        people.where((p) => p.occasionTags.contains(o.tag)).length;
-  }
-
-  final runway = await db.calendarRunway();
-  String? warn;
-  if (runway == null) {
-    warn = 'Occasion calendar is empty — nothing will ever fire.';
-  } else if (runway.difference(now).inDays < 365) {
-    warn = 'Occasion calendar ends ${fmtDate(runway)} — add more dates.';
-  }
-
-  return _TodayData(
-    occasions: occ,
-    pings: pings,
-    settle: settle,
-    taggedCounts: counts,
-    runwayWarning: warn,
-  );
-}
-
-class _TodayData {
-  _TodayData({
-    required this.occasions,
-    required this.pings,
-    required this.settle,
-    required this.taggedCounts,
-    required this.runwayWarning,
-  });
-  final List<Occasion> occasions;
-  final List<Person> pings;
-  final List<MoneyRow> settle;
-  final Map<String, int> taggedCounts;
-  final String? runwayWarning;
-
-  int get count =>
-      occasions.length + pings.length + settle.length + (runwayWarning == null ? 0 : 1);
 }
 
 /// Sections with zero items are hidden entirely, never shown empty.

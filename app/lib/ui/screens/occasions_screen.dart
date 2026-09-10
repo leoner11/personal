@@ -149,7 +149,10 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
   /// buffer. Dates are hand-entered because no API can supply them.
   Future<void> _seed() async {
     for (final row in kSeedOccasions) {
+      // ⚠ Deterministic id, same as seedIfEmpty(). A reseed here that minted
+      // fresh uuids would duplicate the phone's calendar on the next sync.
       await widget.db.into(widget.db.occasions).insert(OccasionsCompanion.insert(
+            id: Value(seededId(occasionSeedKey(row.$1, row.$2))),
             name: row.$1,
             date: row.$2,
             tag: row.$3.name,

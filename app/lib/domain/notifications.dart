@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -34,6 +36,9 @@ class Notifier {
     final info = await FlutterTimezone.getLocalTimezone();
     tz.setLocalLocation(tz.getLocation(info.identifier));
 
+    // ⚠ initialize() throws ArgumentError if the settings for the platform it
+    // is running on are absent. All three are declared or the phone dies on
+    // launch. iOS deliberately does NOT request here — see _checkReady().
     await _plugin.initialize(
       settings: const InitializationSettings(
         macOS: DarwinInitializationSettings(
@@ -41,15 +46,59 @@ class Notifier {
           requestBadgePermission: true,
           requestSoundPermission: true,
         ),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
     );
-    // ⚠ SPIKE 0.1b: initialize() returns BEFORE the permission prompt is
-    // answered, so its return value is meaningless. Ask the system instead.
-    final perms = await _plugin
-        .resolvePlatformSpecificImplementation<
-            MacOSFlutterLocalNotificationsPlugin>()
-        ?.checkPermissions();
-    _ready = perms?.isAlertEnabled ?? false;
+    _ready = await _checkReady();
+  }
+
+  /// ⚠ `_ready` must stay honest. A notifier that reports ready when it is not
+  /// is this app's worst failure mode — the calendar looks armed and fires
+  /// nothing, which is indistinguishable from a quiet month.
+  Future<bool> _checkReady() async {
+    // ⚠ SPIKE 0.1b: on macOS initialize() returns BEFORE the permission prompt
+    // is answered, so its return value is meaningless. Ask the system instead.
+    if (Platform.isMacOS) {
+      final perms = await _plugin
+          .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin>()
+          ?.checkPermissions();
+      return perms?.isAlertEnabled ?? false;
+    }
+
+    // iOS has a better answer available than macOS does: requestPermissions()
+    // awaits the user's tap and returns what they chose, so the 0.1b race does
+    // not apply. That is why the iOS init settings above request nothing.
+    if (Platform.isIOS) {
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      return await ios?.requestPermissions(
+              alert: true, badge: true, sound: true) ??
+          false;
+    }
+
+    if (Platform.isAndroid) {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      // Android 13+ gates notifications behind a runtime permission.
+      final granted = await android?.requestNotificationsPermission() ?? false;
+      // ⚠ Exact alarms are a SEPARATE permission, and this app is useless
+      // without them. An inexact alarm may slide by hours, and a T-14 festival
+      // reminder that lands on T-13 at 3am is not the reminder that was
+      // scheduled. Ask only when it is not already held — the request bounces
+      // the user out to a system settings screen.
+      if (await android?.canScheduleExactNotifications() == false) {
+        await android?.requestExactAlarmsPermission();
+      }
+      return granted;
+    }
+
+    return false;
   }
 
   bool get ready => _ready;
@@ -62,7 +111,7 @@ class Notifier {
     await _plugin.cancelAll();
 
     var n = 0;
-    final people = await db.watchPeople().first;
+    final people = await db.allPeople();
     final occasions = await db.upcomingOccasions(withinDays: 1200);
 
     for (final o in occasions) {
@@ -106,6 +155,17 @@ class Notifier {
       scheduledDate: at,
       notificationDetails: const NotificationDetails(
         macOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+        iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+        // One channel. The app has one kind of notification — something is due
+        // — and splitting it into "occasions" and "pings" would only let the
+        // user mute half the app by accident.
+        android: AndroidNotificationDetails(
+          'due',
+          'Reminders',
+          channelDescription: 'Festivals and follow-up pings that are due.',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
@@ -118,10 +178,13 @@ class Notifier {
 
 /// Seeds the occasion calendar if it is empty. ⚠ Three years, not one.
 Future<void> seedIfEmpty(AppDatabase db) async {
-  final existing = await db.watchOccasions().first;
+  final existing = await db.allOccasions();
   if (existing.isNotEmpty) return;
   for (final row in kSeedOccasions) {
+    // ⚠ Deterministic id, not the default v4 — see seededId(). The phone seeds
+    // the same calendar offline and the two must collapse to one row, not 38.
     await db.into(db.occasions).insert(OccasionsCompanion.insert(
+          id: Value(seededId(occasionSeedKey(row.$1, row.$2))),
           name: row.$1,
           date: row.$2,
           tag: row.$3.name,

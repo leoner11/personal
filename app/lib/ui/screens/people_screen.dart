@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../data/database.dart';
 import '../../domain/channel.dart';
 import '../../domain/money_fmt.dart';
+import '../../domain/recency.dart';
 import '../../domain/occasions.dart';
 import '../../theme/tokens.dart';
 import '../add_person_sheet.dart';
@@ -130,30 +131,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
 
   /// Recent · 1–3 mo · 3–6 mo · 6 mo+ · Never
   Widget _grouped(List<Person> rows, AppTokens t) {
-    final buckets = <String, List<Person>>{
-      'RECENT': [],
-      '1–3 MO': [],
-      '3–6 MO': [],
-      '6 MO+': [],
-      'NEVER': [],
-    };
-    for (final p in rows) {
-      final lt = _lastTouch[p.id];
-      if (lt == null) {
-        buckets['NEVER']!.add(p);
-      } else {
-        final d = DateTime.now().difference(lt).inDays;
-        if (d < 30) {
-          buckets['RECENT']!.add(p);
-        } else if (d < 90) {
-          buckets['1–3 MO']!.add(p);
-        } else if (d < 180) {
-          buckets['3–6 MO']!.add(p);
-        } else {
-          buckets['6 MO+']!.add(p);
-        }
-      }
-    }
+    final buckets = groupByRecency(rows, _lastTouch);
 
     return ListView(children: [
       for (final e in buckets.entries)

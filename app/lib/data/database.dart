@@ -12,6 +12,20 @@ const _uuid = Uuid();
 /// and destroys one. A UUID is unique wherever it was created.
 String newId() => _uuid.v4();
 
+/// ⚠ SEEDED rows are the one exception to "ids are random". Every device seeds
+/// its own occasion calendar on first launch, offline, before it has ever
+/// reached the server. With v4 ids the Mac and the phone mint 19 rows each with
+/// different ids and identical content — sync then keeps all 38, and every
+/// festival notifies twice. v5 is a HASH of the key, so both devices derive the
+/// same id independently and last-write-wins collapses them into one row.
+String seededId(String key) => _uuid.v5(Namespace.url.value, 'personal-crm:$key');
+
+/// The stable identity of a seeded occasion: its name and the day it falls on.
+/// Date only, never the full timestamp — two devices in different timezones
+/// must not disagree about what the key is.
+String occasionSeedKey(String name, DateTime date) =>
+    'occasion:$name:${date.toIso8601String().substring(0, 10)}';
+
 /// Stores occasion tags as a comma-separated list of enum names.
 /// Single user, small lists — a join table would be ceremony.
 class TagListConverter extends TypeConverter<List<String>, String> {
@@ -169,7 +183,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -183,6 +197,20 @@ class AppDatabase extends _$AppDatabase {
               await m.deleteTable(t.actualTableName);
             }
             await m.createAll();
+          }
+          // v4 gives seeded occasions deterministic ids so a second device
+          // cannot duplicate the calendar. Rewrites in place rather than
+          // reseeding — hand-corrected dates (Lebaran, Idul Adha, Deepavali)
+          // are worth keeping. Nothing references an occasion by id; money
+          // carries occasion_tag, a string.
+          if (from < 4) {
+            for (final o in await select(occasions).get()) {
+              final want = seededId(occasionSeedKey(o.name, o.date));
+              if (o.id != want) {
+                await (update(occasions)..where((t) => t.id.equals(o.id)))
+                    .write(OccasionsCompanion(id: Value(want)));
+              }
+            }
           }
         },
       );
@@ -204,6 +232,27 @@ class AppDatabase extends _$AppDatabase {
                 p.occasionTags.like('%,$tag,%')))
         ..orderBy([(p) => OrderingTerm.desc(p.id)]))
       .watch();
+
+  /// ⚠ One-shot reads. Use these instead of `watchX().first` when the value is
+  /// only needed once. Taking `.first` from a watch stream builds a query
+  /// stream, subscribes, and immediately cancels it — wasted work in
+  /// production, and drift schedules a zero-duration teardown timer on that
+  /// cancel (StreamQueryStore.markAsClosed) which outlives a widget test and
+  /// trips its "Timer is still pending" assertion.
+  Future<List<Person>> allPeople() => (select(people)
+        ..where((p) => p.deletedAt.isNull())
+        ..orderBy([(p) => OrderingTerm.desc(p.id)]))
+      .get();
+
+  Future<List<Occasion>> allOccasions() => (select(occasions)
+        ..where((o) => o.deletedAt.isNull())
+        ..orderBy([(o) => OrderingTerm.asc(o.date)]))
+      .get();
+
+  Future<List<MoneyRow>> allMoney() => (select(money)
+        ..where((m) => m.deletedAt.isNull())
+        ..orderBy([(m) => OrderingTerm.desc(m.date)]))
+      .get();
 
   Future<int> addPerson(PeopleCompanion p) => into(people).insert(p);
 

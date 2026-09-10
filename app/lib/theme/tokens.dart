@@ -156,6 +156,41 @@ abstract final class T {
   static const mono = TextStyle(fontSize: 11, fontFamily: 'Menlo');
 }
 
+/// Phone type scale. ⚠ The 13pt body does NOT carry — the rule that produced
+/// it was "match the platform's system UI size", and on iOS/Android that is
+/// 17pt. Everything here holds the desktop ratios, scaled.
+///
+/// The screen title is the one place the phone is bigger than the Mac's 20pt
+/// ceiling: a phone header has no window chrome to signal "new screen", so the
+/// type has to do it alone.
+abstract final class PT {
+  static const screenTitle = TextStyle(fontSize: 28, fontWeight: FontWeight.w600);
+  static const entityName = TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
+  static const sectionLabel = TextStyle(fontSize: 13, fontWeight: FontWeight.w600);
+  static const body = TextStyle(fontSize: 17);
+  static const secondary = TextStyle(fontSize: 15);
+  static const micro = TextStyle(fontSize: 12, fontWeight: FontWeight.w500);
+  static const mono = TextStyle(fontSize: 15, fontFamily: 'Menlo');
+}
+
+/// Phone density. ⚠ Nothing interactive may be shorter than [tapMin].
+abstract final class PD {
+  static const listRow = 56.0;
+  static const listRowTwoLine = 72.0;
+  static const control = 48.0;
+  static const groupHeader = 32.0;
+  static const tag = 36.0;
+
+  /// The floor for anything you can touch. No exceptions.
+  static const tapMin = 44.0;
+
+  /// Matches the Mac's ScreenBody horizontal padding, so the two shells feel
+  /// like the same app rather than two ports.
+  static const screenPad = 20.0;
+  static const sectionGap = 16.0;
+  static const groupGap = 12.0;
+}
+
 /// Design system density table. Flutter's defaults target touch and will
 /// inflate every one of these.
 abstract final class D {
