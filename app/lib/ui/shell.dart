@@ -321,35 +321,64 @@ class ScreenBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTokens.of(context);
-    return DragToMoveArea(
-      child: Container(
-        color: t.canvas,
-        padding: const EdgeInsets.fromLTRB(20, 34, 20, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Column(
+    return Container(
+      color: t.canvas,
+      child: Stack(
+        children: [
+          // ⚠ Only the header moves the window. DragToMoveArea is a
+          // GestureDetector with onPanStart + onDoubleTap, and it used to wrap
+          // this whole screen — so every text field underneath lost
+          // drag-to-select and double-click-to-select-a-word to the window
+          // manager. The strip below the native titlebar and the title block
+          // itself are draggable; nothing else is.
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 34,
+            child: DragToMoveArea(child: SizedBox.expand()),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 34, 20, 0),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: T.screenTitle.copyWith(color: t.textPrimary)),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      subtitle!,
-                    ],
+                    // Expanded, not Spacer: the empty space beside the title
+                    // stays a drag handle, but the trailing action sits
+                    // outside the drag area so its taps arrive intact.
+                    Expanded(
+                      child: DragToMoveArea(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title,
+                                style: T.screenTitle
+                                    .copyWith(color: t.textPrimary)),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 2),
+                              subtitle!,
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    ?trailing,
                   ],
                 ),
-                const Spacer(),
-                ?trailing,
-              ],
-            ),
-            const SizedBox(height: 14),
-            Expanded(child: child),
-          ],
-        ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: child,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
