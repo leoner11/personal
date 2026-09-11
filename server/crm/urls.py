@@ -16,21 +16,20 @@ Including another URLconf
 """
 import os
 
-from django.contrib import admin
-from django.conf import settings
 from django.urls import path
+
+from core.auth import login, logout, me, register
 from core.sync import sync
 
-# /sync is the whole point of this server, and BearerTokenMiddleware guards it.
-urlpatterns = [path('sync', sync)]
-
-# ⚠ /admin is NOT covered by BearerTokenMiddleware — it is a browser surface
-# and a browser cannot send an Authorization header. Its only protection is a
-# Django superuser password, on a public IP, at a URL every scanner tries.
+# ⚠ No /admin. See INSTALLED_APPS in settings.py for why it was removed rather
+# than merely hidden.
 #
-# The clients do not need it: the Dart seedIfEmpty() builds the occasion
-# calendar on each device, so admin is a convenience for bulk edits rather than
-# a dependency. So it is mounted in development, and in production only if you
-# ask for it by name.
-if settings.DEBUG or os.environ.get("DJANGO_ENABLE_ADMIN") == "1":
-    urlpatterns.append(path('admin/', admin.site.urls))
+# /auth/register and /auth/login are the only unauthenticated routes; everything
+# else goes through BearerTokenMiddleware.
+urlpatterns = [
+    path('auth/register', register),
+    path('auth/login', login),
+    path('auth/logout', logout),
+    path('auth/me', me),
+    path('sync', sync),
+]

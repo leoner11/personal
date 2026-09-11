@@ -66,10 +66,22 @@ class SyncEngine {
         headers: _headers, body: jsonEncode(body));
   }
 
+  /// Set when the server rejects our token. ⚠ A 401 is NOT a transient
+  /// network failure to retry forever — the token was revoked or the account
+  /// changed, and only signing in again fixes it. Without telling this apart
+  /// the sidebar would say "Syncing…" indefinitely against a server that will
+  /// never accept us, which is exactly the armed-and-dead state this project
+  /// keeps having to design against.
+  bool unauthorized = false;
+
   Future<String?> _pull(String? since) async {
     final uri = Uri.parse(
         '$baseUrl/sync${since != null ? '?since=${Uri.encodeComponent(since)}' : ''}');
     final res = await http.get(uri, headers: _headers);
+    if (res.statusCode == 401) {
+      unauthorized = true;
+      return null;
+    }
     if (res.statusCode != 200) return null;
 
     final data = jsonDecode(res.body) as Map<String, dynamic>;

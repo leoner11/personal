@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
+import '../../domain/auth.dart';
+import '../../domain/config.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/money_totals.dart';
 import '../../theme/tokens.dart';
+import 'account_screen.dart';
 import 'money_screen.dart';
 import 'notes_screen.dart';
 import 'phone_primitives.dart';
@@ -56,6 +59,9 @@ class PhoneReviewScreen extends StatelessWidget {
             onTap: (c) => _push(c, PhoneNotesScreen(db: db)),
           ),
           const PhoneDivider(),
+          const SizedBox(height: PD.sectionGap),
+          _AccountEntry(db: db),
+          const PhoneDivider(),
         ],
       ),
     );
@@ -75,6 +81,34 @@ class PhoneReviewScreen extends StatelessWidget {
           backgroundColor: AppTokens.of(c).canvas,
           body: SafeArea(top: false, child: screen),
         ),
+      ),
+    );
+  }
+}
+
+/// ⚠ Sign-in lives here, one tap from a tab, and NOT in front of the app.
+/// Local-first is the non-negotiable: everything works signed out, and this
+/// row decides only whether the local database also reaches the server.
+class _AccountEntry extends StatelessWidget {
+  const _AccountEntry({required this.db});
+  final AppDatabase db;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = appAuth;
+    if (auth == null) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: auth,
+      builder: (context, _) => PhoneRow(
+        title: 'Account',
+        subtitle: !kSyncEnabled
+            ? 'No server configured'
+            : auth.signedIn
+                ? 'Syncing as ${auth.username}'
+                : 'Not signed in — this phone is local only',
+        chevron: true,
+        onTap: () => PhoneReviewScreen._push(
+            context, PhoneAccountScreen(auth: auth)),
       ),
     );
   }

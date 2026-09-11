@@ -5,7 +5,9 @@ import '../data/database.dart';
 import 'add_person_sheet.dart';
 import '../domain/config.dart';
 import '../domain/money_fmt.dart';
+import '../domain/auth.dart';
 import '../domain/sync.dart';
+import 'account_dialog.dart';
 import '../theme/tokens.dart';
 import 'screens/money_screen.dart';
 import 'screens/notes_screen.dart';
@@ -219,18 +221,57 @@ class _SyncLine extends StatefulWidget {
 }
 
 class _SyncLineState extends State<_SyncLine> {
-  String _label = kSyncEnabled ? 'Syncing…' : 'Local only';
+  String _label = 'Local only';
   bool _stale = false;
+
+  AuthState? get _auth => appAuth;
+
+  /// ⚠ Sync needs BOTH a configured https server and a signed-in account. The
+  /// token is no longer compiled in, so "configured" alone is not enough.
+  bool get _canSync => kSyncEnabled && (_auth?.signedIn ?? false);
 
   @override
   void initState() {
     super.initState();
-    if (kSyncEnabled) _run();
+    _auth?.addListener(_onAuth);
+    if (_canSync) _run();
+  }
+
+  @override
+  void dispose() {
+    _auth?.removeListener(_onAuth);
+    super.dispose();
+  }
+
+  void _onAuth() {
+    if (!mounted) return;
+    setState(() {});
+    if (_canSync) _run();
+  }
+
+  Future<void> _open() async {
+    await AccountDialog.show(context);
   }
 
   Future<void> _run() async {
-    final engine = SyncEngine(widget.db, baseUrl: kSyncBaseUrl, token: kSyncToken);
+    final token = _auth?.token;
+    if (token == null) return;
+    final engine =
+        SyncEngine(widget.db, baseUrl: kSyncBaseUrl, token: token);
     final at = await engine.run();
+    // ⚠ A 401 is not a transient failure to retry forever. The token was
+    // revoked or the account changed, and only signing in again fixes it —
+    // so drop it rather than sitting on "Syncing…" against a server that
+    // will never accept us.
+    if (engine.unauthorized) {
+      await _auth?.forgetRejectedToken();
+      if (!mounted) return;
+      setState(() {
+        _label = 'Sign in again';
+        _stale = true;
+      });
+      return;
+    }
     if (!mounted) return;
     if (at != null) {
       setState(() {
@@ -251,13 +292,20 @@ class _SyncLineState extends State<_SyncLine> {
   @override
   Widget build(BuildContext context) {
     final t = AppTokens.of(context);
+    final signedOut = kSyncEnabled && !(_auth?.signedIn ?? false);
+    final label = signedOut ? 'Sign in to sync' : _label;
     return MouseRegion(
-      cursor: kSyncEnabled ? SystemMouseCursors.click : MouseCursor.defer,
+      cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: kSyncEnabled ? _run : null,
-        child: Text(_label,
-            style: T.micro
-                .copyWith(color: _stale ? t.attention.text : t.textMuted)),
+        // ⚠ Always tappable now. When it says "Local only" the useful action
+        // is opening the account panel, not retrying a sync that cannot run.
+        onTap: _canSync ? _run : _open,
+        onSecondaryTap: _open,
+        child: Text(label,
+            style: T.micro.copyWith(
+                color: (_stale || signedOut)
+                    ? t.attention.text
+                    : t.textMuted)),
       ),
     );
   }

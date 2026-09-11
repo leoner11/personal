@@ -97,3 +97,24 @@ class Touch(SyncedModel):
     person_id = models.CharField(max_length=36)
     date = models.DateTimeField()
     one_line = models.CharField(max_length=300, blank=True, default="")
+
+
+class AuthToken(models.Model):
+    """A bearer token belonging to one account and one device.
+
+    ⚠ Only the HASH is stored — see core.auth.hash_token. A leaked database or
+    an scp'd backup then contains no usable credential.
+
+    One row per device rather than one per account, so signing out the phone
+    leaves the Mac signed in, and a lost phone can be cut off on its own."""
+
+    key_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    user = models.ForeignKey(
+        "auth.User", on_delete=models.CASCADE, related_name="tokens"
+    )
+    label = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} / {self.label or 'unnamed device'}"

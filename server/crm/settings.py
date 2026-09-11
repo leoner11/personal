@@ -59,25 +59,28 @@ if not DEBUG:
 
 # Application definition
 
+# ⚠ django.contrib.admin is deliberately absent. It is a browser surface that
+# a bearer token cannot guard, at a URL every scanner tries, and the clients
+# never needed it — the Dart seedIfEmpty() builds the occasion calendar on each
+# device. Accounts replaced it as the way in.
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    'django.contrib.auth',          # the User model and password hashing
+    'django.contrib.contenttypes',  # auth depends on it
     'core',
 ]
 
+# ⚠ This is a JSON API for native clients. With the admin gone there is no
+# browser surface at all, so the browser-only middleware is removed rather than
+# left running: sessions, CSRF, messages and clickjacking all exist to defend a
+# cookie that no longer exists.
+#
+# ⚠ AuthenticationMiddleware in particular had to go. It ran AFTER ours and
+# replaced the request.user we had just set with AnonymousUser, so an
+# authenticated request reported no user. Found by a test.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'core.middleware.BearerTokenMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.BearerTokenMiddleware',
 ]
 
 ROOT_URLCONF = 'crm.urls'
@@ -157,30 +160,18 @@ MAILERS = {
     },
 }
 
-# ⚠ One bearer token. THE TOKEN IS THE ACCOUNT — for one person with two
-# devices that is the correct design, and it is not optional: an open API on a
-# public IP is found by scanners within hours, and the contact list and the
-# cashflow are both in there.
-_DEV_TOKEN = "dev-token-change-me"
-SYNC_TOKEN = os.environ.get("SYNC_TOKEN", _DEV_TOKEN)
-
-# ⚠⚠ REFUSE TO BOOT rather than serve with the development token.
+# ⚠ Tokens now belong to ACCOUNTS, not to the deployment — see core/auth.py.
+# There is no shared secret in this file any more.
 #
-# This file is in a PUBLIC repository, so "dev-token-change-me" is a password
-# the entire internet can read. Deploying without setting SYNC_TOKEN would have
-# worked perfectly — sync would sync, nothing would look wrong — while leaving
-# every contact and every money row readable and writable by anyone who found
-# the host. That is this project's defining failure mode: armed and dead looks
-# exactly like fine. So it fails loudly, at startup, before it can serve once.
-if not DEBUG and SYNC_TOKEN == _DEV_TOKEN:
-    from django.core.exceptions import ImproperlyConfigured
-
-    raise ImproperlyConfigured(
-        "SYNC_TOKEN is still the public development default. Set it to a real "
-        "secret, e.g. SYNC_TOKEN=$(python3 -c 'import secrets;"
-        "print(secrets.token_urlsafe(32))'), and put the same value in the "
-        "app's lib/domain/config.dart."
-    )
+# REGISTRATION IS CLOSED BY DEFAULT, and this is the important part. The models
+# carry NO owner column: every row belongs to the deployment, not to a user. So
+# a second account would not get its own data, it would get YOURS. Registration
+# therefore requires BOTH this secret AND that no account exists yet.
+#
+# Leaving it unset disables registration entirely, which is the correct state
+# for every moment after you have made your one account. Without it, a fresh
+# public server is a race between you and whoever scans it first.
+REGISTRATION_SECRET = os.environ.get("REGISTRATION_SECRET", "")
 
 # SQLite: backups are `scp` on one file. No scale argument at one user.
 USE_TZ = True

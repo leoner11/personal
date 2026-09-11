@@ -15,39 +15,71 @@ DJANGO_DEBUG=1 ./.venv/bin/python manage.py runserver 8765
 DJANGO_DEBUG=1 ./.venv/bin/python manage.py test core   # 6 auth tests
 ```
 
-## Deploying
+## Accounts
 
-⚠ **The token is the account.** There are no users and no login on `/sync` —
-one shared bearer token is the whole auth model, which is correct for one
-person with two devices, and is why the token itself has to be real.
+One account, claimed once, with a token per device.
+
+| Route | Auth | Notes |
+|---|---|---|
+| `POST /auth/register` | `X-Register-Secret` header | Works **once**, and only while `REGISTRATION_SECRET` is set |
+| `POST /auth/login` | none | Throttled; returns a token |
+| `POST /auth/logout` | Bearer | Revokes **only** the token presented |
+| `GET /auth/me` | Bearer | Cheap "is my token still good?" |
+| `GET/POST /sync` | Bearer | Unchanged |
+
+⚠ **Registration is closed by default, and that is load-bearing.** The models
+carry no owner column — every row belongs to the deployment. A second account
+would not get its own data, it would get yours. So registration needs *both*
+the deploy-time secret *and* that no account exists yet. Unset the secret once
+you have your account; that is the correct resting state.
+
+⚠ **Native clients, so no cookies and no CSRF.** A phone has no ambient
+credential a hostile page could make it send. The server returns an opaque
+token, the app keeps it in the Keychain / Android Keystore, and sends it as
+`Authorization: Bearer …`. Only the SHA-256 of each token is stored, so a
+database or backup leak hands over nothing usable.
+
+### Claiming the server, once
+
+```bash
+# on the server, for the one registration only
+export REGISTRATION_SECRET=$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')
+```
+
+Then in the app: **Review → Account** on the phone, or click the sync line in
+the Mac sidebar → *First time on this server?* Enter that secret with your
+chosen username and password. Afterwards, unset `REGISTRATION_SECRET` and
+restart — every later device uses **Sign in**.
+
+## Deploying
 
 ```bash
 export DJANGO_SECRET_KEY=$(python3 -c 'import secrets;print(secrets.token_urlsafe(50))')
-export SYNC_TOKEN=$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')
 export DJANGO_ALLOWED_HOSTS=crm.example.com
-# DJANGO_DEBUG unset. DJANGO_ENABLE_ADMIN unset unless you want /admin.
+# DJANGO_DEBUG unset.
 ```
 
-Then put the same `SYNC_TOKEN` into `app/lib/domain/config.dart` as
-`kSyncToken`, set `kSyncBaseUrl` to `https://crm.example.com`, and rebuild.
+Then set `kSyncBaseUrl` in `app/lib/domain/config.dart` to
+`https://crm.example.com` and rebuild. There is **no token to copy in any
+more** — it comes from signing in.
 
 | Variable | Default | Why |
 |---|---|---|
 | `DJANGO_SECRET_KEY` | insecure dev key | Signs sessions and CSRF. Public repo, so it cannot be committed. |
-| `SYNC_TOKEN` | `dev-token-change-me` | **The server refuses to boot on the default when `DEBUG` is off.** |
+| `REGISTRATION_SECRET` | unset = registration off | Needed once, to claim the server. Unset it afterwards. |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Was `*`. Set it to the real host. |
 | `DJANGO_DEBUG` | off | On, a 500 shows settings and locals to whoever triggered it. |
-| `DJANGO_ENABLE_ADMIN` | off in production | See below. |
 
 ### What is actually exposed
 
 - **`/sync`** — guarded by `BearerTokenMiddleware`, compared with
   `secrets.compare_digest` so the comparison time leaks nothing.
-- **`/admin`** — **not** covered by that middleware; a browser cannot send an
-  `Authorization` header. Its only protection is a Django superuser password,
-  at a URL every scanner on the internet tries. The clients do not need it —
-  the Dart `seedIfEmpty()` builds the occasion calendar on each device — so it
-  is not mounted in production unless you set `DJANGO_ENABLE_ADMIN=1`.
+- **`/admin`** — **removed entirely**, not hidden. `django.contrib.admin` is
+  not installed and nothing routes to it. It was a browser surface a bearer
+  token cannot guard, at a URL every scanner tries, and the clients never
+  needed it: the Dart `seedIfEmpty()` builds the occasion calendar on each
+  device. The session, CSRF, auth and messages middleware went with it — with
+  no browser there is no cookie for them to defend.
 
 ⚠ **HTTPS is not optional.** The token rides in a header on every request, and
 phone sync happens on cafe wifi. The client refuses to sync to an `http://`

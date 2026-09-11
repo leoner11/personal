@@ -6,12 +6,11 @@
 /// says so. Nothing else changes; sync is not on the critical path.
 const kSyncBaseUrl = '';           // e.g. 'https://crm.example.com'
 
-/// ⚠ MUST match SYNC_TOKEN on the server, and MUST NOT stay this value.
-/// This default is published in a public repository, so it is a password the
-/// whole internet can read. The server refuses to boot with it outside debug;
-/// this is the other half of the same pair.
-///   SYNC_TOKEN=$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')
-const kSyncToken = 'dev-token-change-me';
+// ⚠ There is no token constant here any more. It used to be a shared secret
+// compiled into the app, which meant the same string sat in a public
+// repository, in every build, and could only be rotated by rebuilding both
+// clients. The token now comes from signing in and lives in the Keychain /
+// Android Keystore — see domain/auth.dart.
 
 /// ⚠ https only. The token rides in an Authorization header on every request,
 /// so over plain http it is readable by anyone on the network — and phone sync

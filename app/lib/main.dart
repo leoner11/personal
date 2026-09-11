@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'data/database.dart';
+import 'domain/auth.dart';
 import 'domain/notifications.dart';
 import 'theme/tokens.dart';
 import 'ui/phone/phone_shell.dart';
@@ -27,6 +28,13 @@ Future<void> main() async {
   await notifier.init();
   await notifier.rescheduleAll();
   appNotifier = notifier;
+
+  // ⚠ Loaded BEFORE the first frame so the UI never flashes "signed out" at
+  // someone who is signed in — the Keychain read is async and a frame is not.
+  // Note this does not gate anything: the app runs identically either way.
+  final auth = AuthState();
+  await auth.load();
+  appAuth = auth;
 
   // ⚠ Read BEFORE the first frame. If the app was launched by tapping a
   // reminder, the first screen must be Today — asking afterwards means the
