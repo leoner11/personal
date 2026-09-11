@@ -31,9 +31,30 @@ SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY", "django-insecure-local-development-only")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+#
+# ⚠ Defaults to OFF. It used to default to True, which meant forgetting one
+# environment variable served a full stack trace — settings, local variables,
+# the SQL around the error — to anyone who could trigger a 500 on a public IP.
+# The safe value is the one you get by forgetting.
+DEBUG = os.environ.get("DJANGO_DEBUG", "") == "1"
 
-ALLOWED_HOSTS = ["*"]  # single user behind Caddy; tighten to the real host on deploy
+# ⚠ Was ["*"]. Behind Caddy that is survivable, but it also means the app
+# answers to any Host header, which is what makes cache-poisoning and
+# password-reset-link forgery work. Set DJANGO_ALLOWED_HOSTS=crm.example.com.
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+
+# Caddy terminates TLS and proxies plain HTTP to gunicorn, so without this
+# Django believes every request is insecure and the redirect below loops.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in ALLOWED_HOSTS]
 
 
 # Application definition
@@ -136,10 +157,30 @@ MAILERS = {
     },
 }
 
-# ⚠ One hardcoded bearer token. Set SYNC_TOKEN in the environment on the VPS.
-# Minimal on purpose, but not optional: an open API on a public IP is found by
-# scanners within hours and the contact list and cashflow are in there.
-SYNC_TOKEN = os.environ.get("SYNC_TOKEN", "dev-token-change-me")
+# ⚠ One bearer token. THE TOKEN IS THE ACCOUNT — for one person with two
+# devices that is the correct design, and it is not optional: an open API on a
+# public IP is found by scanners within hours, and the contact list and the
+# cashflow are both in there.
+_DEV_TOKEN = "dev-token-change-me"
+SYNC_TOKEN = os.environ.get("SYNC_TOKEN", _DEV_TOKEN)
+
+# ⚠⚠ REFUSE TO BOOT rather than serve with the development token.
+#
+# This file is in a PUBLIC repository, so "dev-token-change-me" is a password
+# the entire internet can read. Deploying without setting SYNC_TOKEN would have
+# worked perfectly — sync would sync, nothing would look wrong — while leaving
+# every contact and every money row readable and writable by anyone who found
+# the host. That is this project's defining failure mode: armed and dead looks
+# exactly like fine. So it fails loudly, at startup, before it can serve once.
+if not DEBUG and SYNC_TOKEN == _DEV_TOKEN:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        "SYNC_TOKEN is still the public development default. Set it to a real "
+        "secret, e.g. SYNC_TOKEN=$(python3 -c 'import secrets;"
+        "print(secrets.token_urlsafe(32))'), and put the same value in the "
+        "app's lib/domain/config.dart."
+    )
 
 # SQLite: backups are `scp` on one file. No scale argument at one user.
 USE_TZ = True

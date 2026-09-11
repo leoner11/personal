@@ -14,11 +14,23 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+import os
+
 from django.contrib import admin
+from django.conf import settings
 from django.urls import path
 from core.sync import sync
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('sync', sync),
-]
+# /sync is the whole point of this server, and BearerTokenMiddleware guards it.
+urlpatterns = [path('sync', sync)]
+
+# ⚠ /admin is NOT covered by BearerTokenMiddleware — it is a browser surface
+# and a browser cannot send an Authorization header. Its only protection is a
+# Django superuser password, on a public IP, at a URL every scanner tries.
+#
+# The clients do not need it: the Dart seedIfEmpty() builds the occasion
+# calendar on each device, so admin is a convenience for bulk edits rather than
+# a dependency. So it is mounted in development, and in production only if you
+# ask for it by name.
+if settings.DEBUG or os.environ.get("DJANGO_ENABLE_ADMIN") == "1":
+    urlpatterns.append(path('admin/', admin.site.urls))

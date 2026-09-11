@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:personal_crm/domain/config.dart';
 import 'package:personal_crm/data/database.dart';
 
 /// Regressions for the column-exists-but-feature-missing audit.
@@ -152,5 +153,23 @@ void main() {
     await db.into(db.engagements).insert(EngagementsCompanion.insert(
         id: Value(id), name: 'Ralali JV', notes: const Value('via ZIBS intro')));
     expect((await db.watchEngagements().first).single.notes, 'via ZIBS intro');
+  });
+
+  group('sync is not allowed to leak the token', () {
+    // ⚠ The token rides in an Authorization header on EVERY sync request, and
+    // phone sync happens on cafe and airport wifi. Over http that header is
+    // readable by anyone on the network.
+    test('an http:// base url disables sync rather than leaking over it', () {
+      expect(syncEnabledFor('http://crm.example.com'), isFalse);
+      expect(syncEnabledFor('http://192.168.1.10:8765'), isFalse);
+    });
+
+    test('https is what turns sync on', () {
+      expect(syncEnabledFor('https://crm.example.com'), isTrue);
+    });
+
+    test('empty stays local-only, which is the default state', () {
+      expect(syncEnabledFor(''), isFalse);
+    });
   });
 }
