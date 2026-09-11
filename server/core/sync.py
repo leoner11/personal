@@ -36,7 +36,9 @@ DATETIME_FIELDS = {"met_when", "ping_date", "date", "deleted_at"}
 
 
 def _serialize(obj, table):
-    out = {"id": obj.id, "updated_at": obj.updated_at.isoformat()}
+    # ⚠ client_id goes out as "id". The clients have always spoken "id" and the
+    # rename is a server-side storage detail — see SyncedModel.client_id.
+    out = {"id": obj.client_id, "updated_at": obj.updated_at.isoformat()}
     for f in FIELDS[table]:
         v = getattr(obj, f)
         out[f] = v.isoformat() if hasattr(v, "isoformat") else v
@@ -51,7 +53,9 @@ def pull(request):
     server_time = timezone.now().isoformat()
 
     for table, model in TABLES.items():
-        qs = model.objects.all()
+        # ⚠ Scoped to the caller. A row with no owner is returned to nobody,
+        # which is the fail-closed direction if one is ever created by a bug.
+        qs = model.objects.filter(owner=request.user)
         if since:
             dt = parse_datetime(since)
             if dt:
@@ -83,13 +87,22 @@ def push(request):
                         v = parse_datetime(v)
                     data[f] = v
 
-                pk = row.get("id")
-                if not pk:
+                cid = row.get("id")
+                if not cid:
                     # ⚠ The server never mints ids. A row without one is a
                     # client bug; skipping is safer than inventing an id that
                     # the client will never recognise as its own.
                     continue
-                obj, _ = model.objects.update_or_create(id=pk, defaults=data)
+
+                # ⚠ OWNER IS PART OF THE LOOKUP, not just of the payload. With
+                # it only in defaults, pushing another account's id would find
+                # their row and overwrite it — the clients generate their own
+                # primary keys, so an id is a guessable claim, not a secret.
+                # Matching on (owner, client_id) makes one account's rows
+                # unreachable from another's by construction.
+                obj, _ = model.objects.update_or_create(
+                    owner=request.user, client_id=cid, defaults=data
+                )
                 stamped[table].append(_serialize(obj, table))
 
     return JsonResponse({"tables": stamped})

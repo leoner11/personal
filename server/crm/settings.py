@@ -160,17 +160,17 @@ MAILERS = {
     },
 }
 
-# ⚠ Tokens now belong to ACCOUNTS, not to the deployment — see core/auth.py.
-# There is no shared secret in this file any more.
+# ⚠ Tokens belong to ACCOUNTS, not to the deployment — see core/auth.py.
+# There is no shared secret in this file.
 #
-# REGISTRATION IS CLOSED BY DEFAULT, and this is the important part. The models
-# carry NO owner column: every row belongs to the deployment, not to a user. So
-# a second account would not get its own data, it would get YOURS. Registration
-# therefore requires BOTH this secret AND that no account exists yet.
+# Registration is OPEN by default: this server is multi-user, every row carries
+# an owner, and sync is filtered by it, so a new account gets an empty app
+# rather than a view of yours.
 #
-# Leaving it unset disables registration entirely, which is the correct state
-# for every moment after you have made your one account. Without it, a fresh
-# public server is a race between you and whoever scans it first.
+# Set REGISTRATION_SECRET to close it again — then /auth/register additionally
+# requires an X-Register-Secret header matching it. Worth doing on a personal
+# server that only ever needs your own account: an open endpoint on a public
+# IP will be found and used to create junk accounts even if they see nothing.
 REGISTRATION_SECRET = os.environ.get("REGISTRATION_SECRET", "")
 
 # SQLite: backups are `scp` on one file. No scale argument at one user.

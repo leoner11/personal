@@ -17,21 +17,40 @@ DJANGO_DEBUG=1 ./.venv/bin/python manage.py test core   # 6 auth tests
 
 ## Accounts
 
-One account, claimed once, with a token per device.
+Ordinary signup and login, multi-user, with a token per device.
 
 | Route | Auth | Notes |
 |---|---|---|
-| `POST /auth/register` | `X-Register-Secret` header | Works **once**, and only while `REGISTRATION_SECRET` is set |
+| `POST /auth/register` | none, or an invite code | Open unless `REGISTRATION_SECRET` is set |
 | `POST /auth/login` | none | Throttled; returns a token |
 | `POST /auth/logout` | Bearer | Revokes **only** the token presented |
 | `GET /auth/me` | Bearer | Cheap "is my token still good?" |
 | `GET/POST /sync` | Bearer | Unchanged |
 
-⚠ **Registration is closed by default, and that is load-bearing.** The models
-carry no owner column — every row belongs to the deployment. A second account
-would not get its own data, it would get yours. So registration needs *both*
-the deploy-time secret *and* that no account exists yet. Unset the secret once
-you have your account; that is the correct resting state.
+### How accounts are kept apart
+
+Every synced row carries an `owner`, and every sync query filters on it, so a
+new account gets an empty app rather than a view of yours.
+
+⚠ **The clients generate their own primary keys**, which means a row id is a
+guessable claim, not a secret — and seeded occasion ids are *deliberately
+identical* on every device (UUID v5 of name + date) and therefore across
+accounts too. Two consequences, both handled in the schema rather than in a
+view someone can later forget:
+
+- Uniqueness is `(owner, client_id)`, not `id`. A globally unique id would make
+  the second account's entire festival calendar collide with the first's and
+  vanish.
+- The push path matches on `(owner, client_id)`. With the owner only in the
+  payload, pushing another account's id would find *their* row and overwrite it.
+
+Both are covered by `TenantIsolationTests`, and both were mutation-checked —
+removing either guard makes those tests fail.
+
+⚠ Signup being open is safe *because* of the above, not instead of it. Set
+`REGISTRATION_SECRET` anyway on a server that only needs your own account:
+an open endpoint on a public IP will be found and used to create junk accounts
+even though they see nothing of yours.
 
 ⚠ **Native clients, so no cookies and no CSRF.** A phone has no ambient
 credential a hostile page could make it send. The server returns an opaque
@@ -39,17 +58,11 @@ token, the app keeps it in the Keychain / Android Keystore, and sends it as
 `Authorization: Bearer …`. Only the SHA-256 of each token is stored, so a
 database or backup leak hands over nothing usable.
 
-### Claiming the server, once
+### Making your account
 
-```bash
-# on the server, for the one registration only
-export REGISTRATION_SECRET=$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')
-```
-
-Then in the app: **Review → Account** on the phone, or click the sync line in
-the Mac sidebar → *First time on this server?* Enter that secret with your
-chosen username and password. Afterwards, unset `REGISTRATION_SECRET` and
-restart — every later device uses **Sign in**.
+In the app: **Review → Account** on the phone, or click the sync line in the
+Mac sidebar → *Create an account*. Leave the invite code blank unless you set
+`REGISTRATION_SECRET`. Every later device uses **Sign in**.
 
 ## Deploying
 
@@ -66,7 +79,7 @@ more** — it comes from signing in.
 | Variable | Default | Why |
 |---|---|---|
 | `DJANGO_SECRET_KEY` | insecure dev key | Signs sessions and CSRF. Public repo, so it cannot be committed. |
-| `REGISTRATION_SECRET` | unset = registration off | Needed once, to claim the server. Unset it afterwards. |
+| `REGISTRATION_SECRET` | unset = signup open | Set it to require an invite code. Recommended on a personal server. |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Was `*`. Set it to the real host. |
 | `DJANGO_DEBUG` | off | On, a 500 shows settings and locals to whoever triggered it. |
 

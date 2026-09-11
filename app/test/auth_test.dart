@@ -84,11 +84,22 @@ void main() {
       await auth.register(
           username: 'leonard',
           password: 'pw',
-          registrationSecret: 'deploy-secret',
-          device: 'Mac');
+          device: 'Mac',
+          registrationSecret: 'invite-code');
 
-      expect(header, 'deploy-secret');
-      expect(body, isNot(contains('deploy-secret')));
+      expect(header, 'invite-code');
+      expect(body, isNot(contains('invite-code')));
+    });
+
+    test('no header is sent when there is no invite code', () async {
+      // ⚠ Signup is open on most servers. Sending an empty X-Register-Secret
+      // would be compared against the configured one and rejected.
+      Map<String, String>? headers;
+      final auth = stateWith(
+          json(201, {'token': 't', 'username': 'leonard'},
+              onCall: (r) => headers = r.headers));
+      await auth.register(username: 'leonard', password: 'pw', device: 'Mac');
+      expect(headers!.containsKey('X-Register-Secret'), isFalse);
     });
   });
 
@@ -111,8 +122,8 @@ void main() {
       expect(await messageFor(429), contains('Too many attempts'));
     });
 
-    test('409 points at signing in rather than registering', () async {
-      expect(await messageFor(409), contains('already has an account'));
+    test('409 says the username is taken', () async {
+      expect(await messageFor(409), contains('username is taken'));
     });
 
     test('an unreachable server is not reported as bad credentials', () async {

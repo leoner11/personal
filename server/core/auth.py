@@ -1,10 +1,15 @@
-"""Accounts, for a single-user self-hosted server.
+"""Accounts.
 
-⚠ WHY THIS IS NOT THE USUAL LOGIN. The models carry no owner column — every
-row belongs to the deployment. A second account would not get its own data, it
-would get the first account's. So registration is closed by construction:
-it needs a deploy-time secret AND that no account exists yet. See
-settings.REGISTRATION_SECRET.
+Ordinary signup and login. Every synced row carries an owner and every sync
+query filters on it, so accounts are isolated and registration can simply be
+open — a new account gets an empty app, not a view of someone else's.
+
+⚠ That isolation is the whole reason this is safe, and it is enforced by a
+(owner, client_id) uniqueness constraint in the database rather than by a check
+in a view that someone can later forget. See core/models.SyncedModel.
+
+Set REGISTRATION_SECRET to close signup on a server that only needs your own
+account; leaving it unset leaves signup open.
 
 ⚠ NATIVE CLIENTS, NOT A WEB APP. There is no session cookie and no CSRF here,
 because there is no browser: a phone has no ambient credential to be tricked
@@ -82,22 +87,24 @@ def _issue(user, label: str) -> str:
 
 @csrf_exempt
 def register(request):
-    """Claim the deployment. Works exactly once, and only with the secret."""
+    """Create an account. Open unless REGISTRATION_SECRET is set."""
     if request.method != "POST":
         return JsonResponse({"detail": "method not allowed"}, status=405)
 
     from django.conf import settings
 
+    # Optional gate. Unset = open signup; set = an invite code is required.
     secret = settings.REGISTRATION_SECRET
-    # Unset means registration is off, which is the right state for every
-    # moment after the one account exists.
-    if not secret:
-        return JsonResponse({"detail": "registration is closed"}, status=403)
+    if secret:
+        presented = request.headers.get("X-Register-Secret", "")
+        if not secrets.compare_digest(presented, secret):
+            _record_failure(request)
+            return JsonResponse(
+                {"detail": "registration is closed on this server"}, status=403
+            )
 
-    presented = request.headers.get("X-Register-Secret", "")
-    if not secrets.compare_digest(presented, secret):
-        _record_failure(request)
-        return JsonResponse({"detail": "registration is closed"}, status=403)
+    if _too_many(request):
+        return JsonResponse({"detail": "too many attempts"}, status=429)
 
     data = _body(request)
     if data is None:
@@ -110,12 +117,9 @@ def register(request):
         )
 
     with transaction.atomic():
-        # ⚠ The count check and the create must not race, or two accounts end
-        # up sharing one set of unowned rows.
-        if User.objects.select_for_update().exists():
+        if User.objects.filter(username=username).exists():
             return JsonResponse(
-                {"detail": "an account already exists on this server"},
-                status=409,
+                {"detail": "that username is taken"}, status=409
             )
         try:
             validate_password(password)

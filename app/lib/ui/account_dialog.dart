@@ -57,8 +57,8 @@ class _AccountDialogState extends State<AccountDialog> {
   bool get _canSubmit =>
       !_busy &&
       _username.text.trim().isNotEmpty &&
-      _password.text.isNotEmpty &&
-      (!_registering || _secret.text.trim().isNotEmpty);
+      // ⚠ Optional: most servers leave signup open.
+      _password.text.isNotEmpty;
 
   Future<void> _submit() async {
     final auth = _auth;
@@ -72,8 +72,8 @@ class _AccountDialogState extends State<AccountDialog> {
         await auth.register(
           username: _username.text.trim(),
           password: _password.text,
-          registrationSecret: _secret.text.trim(),
           device: 'Mac',
+          registrationSecret: _secret.text.trim(),
         );
       } else {
         await auth.login(
@@ -152,12 +152,11 @@ class _AccountDialogState extends State<AccountDialog> {
                 _PasswordField(label: 'Password', controller: _password),
                 if (_registering) ...[
                   const SizedBox(height: 10),
-                  _PasswordField(
-                      label: 'Registration secret', controller: _secret),
+                  Field(label: 'Invite code (optional)', controller: _secret),
                   const SizedBox(height: 4),
                   Text(
-                      'Only needed once, to claim the server. It is the '
-                      'REGISTRATION_SECRET environment variable there.',
+                      'Leave blank unless the server has closed signup with '
+                      'REGISTRATION_SECRET.',
                       style: T.secondary.copyWith(color: t.textMuted)),
                 ],
                 if (_error != null) ...[
@@ -170,7 +169,7 @@ class _AccountDialogState extends State<AccountDialog> {
                   Btn(
                       _registering
                           ? 'I already have an account'
-                          : 'First time on this server?',
+                          : 'Create an account',
                       variant: BtnVariant.ghost,
                       onPressed: _busy
                           ? null

@@ -100,23 +100,28 @@ class AuthApi {
     throw AuthException(switch (r.statusCode) {
       401 => 'Wrong username or password.',
       403 => detail ?? 'Registration is closed on this server.',
-      409 => 'This server already has an account. Sign in instead.',
+      409 => 'That username is taken.',
       429 => 'Too many attempts. Wait a few minutes and try again.',
       _ => detail ?? 'The server returned an error (${r.statusCode}).',
     });
   }
 
-  /// Claims the deployment. Works once, and only with the deploy-time secret.
+  /// Creates an account. [registrationSecret] is only needed on a server that
+  /// has closed signup with REGISTRATION_SECRET; most will leave it open.
   Future<({String token, String username})> register({
     required String username,
     required String password,
-    required String registrationSecret,
     required String device,
+    String registrationSecret = '',
   }) async {
     final d = await _post(
       '/auth/register',
       {'username': username, 'password': password, 'device': device},
-      extraHeaders: {'X-Register-Secret': registrationSecret},
+      // ⚠ A header, never the body: request bodies land in server and proxy
+      // logs, and this is an invite code.
+      extraHeaders: registrationSecret.isEmpty
+          ? null
+          : {'X-Register-Secret': registrationSecret},
     );
     return (token: d['token'] as String, username: d['username'] as String);
   }
@@ -182,14 +187,14 @@ class AuthState extends ChangeNotifier {
   Future<void> register({
     required String username,
     required String password,
-    required String registrationSecret,
     required String device,
+    String registrationSecret = '',
   }) async {
     final r = await _api.register(
       username: username,
       password: password,
-      registrationSecret: registrationSecret,
       device: device,
+      registrationSecret: registrationSecret,
     );
     await _accept(r.token, r.username);
   }

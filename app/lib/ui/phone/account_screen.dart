@@ -55,8 +55,9 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
   bool get _canSubmit =>
       !_busy &&
       _username.text.trim().isNotEmpty &&
-      _password.text.isNotEmpty &&
-      (!_registering || _secret.text.trim().isNotEmpty);
+      // ⚠ The secret is NOT required — most servers leave signup open. Making
+      // it mandatory here would block registration against every one of them.
+      _password.text.isNotEmpty;
 
   Future<void> _submit() async {
     setState(() {
@@ -68,8 +69,8 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
         await widget.auth.register(
           username: _username.text.trim(),
           password: _password.text,
-          registrationSecret: _secret.text.trim(),
           device: _device,
+          registrationSecret: _secret.text.trim(),
         );
       } else {
         await widget.auth.login(
@@ -134,14 +135,14 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
             if (_registering) ...[
               const SizedBox(height: PD.groupGap),
               PhoneField(
-                  label: 'Registration secret',
+                  label: 'Invite code (optional)',
                   controller: _secret,
-                  hint: 'REGISTRATION_SECRET from the server',
+                  hint: 'only if your server requires one',
                   textCapitalization: TextCapitalization.none),
               const SizedBox(height: 6),
               Text(
-                  'Only needed once, to claim the server. Your server sets '
-                  'this as an environment variable.',
+                  'Leave blank unless the server has closed signup with '
+                  'REGISTRATION_SECRET.',
                   style: PT.secondary.copyWith(color: t.textMuted)),
             ],
             if (_error != null) ...[
@@ -160,7 +161,7 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
             PhoneBtn(
                 _registering
                     ? 'I already have an account'
-                    : 'First time on this server?',
+                    : 'Create an account',
                 variant: PhoneBtnVariant.ghost,
                 expand: true,
                 onPressed: _busy

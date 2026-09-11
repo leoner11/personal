@@ -8,7 +8,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from core.auth import hash_token
-from core.models import AuthToken
+from core.models import AuthToken, Person
 
 SECRET = "deploy-time-secret"
 
@@ -18,13 +18,11 @@ def body(response):
 
 
 class RegistrationTests(TestCase):
-    """⚠ The models have NO owner column: every row belongs to the deployment.
-    A second account would not get its own data, it would get the first
-    account's. Registration being closed is therefore not a policy, it is what
-    makes the data model safe."""
+    def setUp(self):
+        cache.clear()
 
-    def post(self, payload, secret=SECRET):
-        headers = {"X-Register-Secret": secret} if secret is not None else {}
+    def post(self, payload, secret=None):
+        headers = {"X-Register-Secret": secret} if secret else {}
         return self.client.post(
             "/auth/register",
             data=json.dumps(payload),
@@ -33,34 +31,32 @@ class RegistrationTests(TestCase):
         )
 
     @override_settings(REGISTRATION_SECRET="")
-    def test_registration_is_off_when_no_secret_is_configured(self):
-        # ⚠ The default state. A fresh public server must not be a race between
-        # the owner and whoever scans it first.
-        r = self.post({"username": "leonard", "password": "a-long-passphrase-1"})
-        self.assertEqual(r.status_code, 403)
-        self.assertEqual(User.objects.count(), 0)
-
-    @override_settings(REGISTRATION_SECRET=SECRET)
-    def test_the_wrong_secret_is_refused(self):
-        r = self.post({"username": "x", "password": "a-long-passphrase-1"}, secret="nope")
-        self.assertEqual(r.status_code, 403)
-        self.assertEqual(User.objects.count(), 0)
-
-    @override_settings(REGISTRATION_SECRET=SECRET)
-    def test_the_first_account_is_created_and_gets_a_token(self):
+    def test_signup_is_open_when_no_secret_is_configured(self):
         r = self.post({"username": "leonard", "password": "a-long-passphrase-1"})
         self.assertEqual(r.status_code, 201)
         self.assertTrue(body(r)["token"])
-        self.assertEqual(User.objects.count(), 1)
 
-    @override_settings(REGISTRATION_SECRET=SECRET)
-    def test_a_second_account_is_refused_even_with_the_right_secret(self):
+    @override_settings(REGISTRATION_SECRET="")
+    def test_a_second_account_is_allowed(self):
         self.post({"username": "leonard", "password": "a-long-passphrase-1"})
-        r = self.post({"username": "someone", "password": "a-long-passphrase-2"})
+        r = self.post({"username": "sri", "password": "a-long-passphrase-2"})
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(User.objects.count(), 2)
+
+    @override_settings(REGISTRATION_SECRET="")
+    def test_a_duplicate_username_is_refused(self):
+        self.post({"username": "leonard", "password": "a-long-passphrase-1"})
+        r = self.post({"username": "leonard", "password": "a-long-passphrase-2"})
         self.assertEqual(r.status_code, 409)
         self.assertEqual(User.objects.count(), 1)
 
     @override_settings(REGISTRATION_SECRET=SECRET)
+    def test_the_secret_closes_signup_when_set(self):
+        self.assertEqual(self.post({"username": "x", "password": "a-long-passphrase-1"}).status_code, 403)
+        r = self.post({"username": "x", "password": "a-long-passphrase-1"}, secret=SECRET)
+        self.assertEqual(r.status_code, 201)
+
+    @override_settings(REGISTRATION_SECRET="")
     def test_a_weak_password_is_refused(self):
         r = self.post({"username": "leonard", "password": "1234"})
         self.assertEqual(r.status_code, 400)
@@ -187,3 +183,91 @@ class AdminIsGoneTests(TestCase):
         from django.conf import settings
 
         self.assertNotIn("django.contrib.admin", settings.INSTALLED_APPS)
+
+
+@override_settings(REGISTRATION_SECRET="")
+class TenantIsolationTests(TestCase):
+    """⚠ THE TESTS THIS WHOLE CHANGE EXISTS FOR.
+
+    The clients generate their own primary keys, so a row id is a guessable
+    claim rather than a secret — and seeded occasion ids are deliberately
+    IDENTICAL on every device and therefore across accounts too. If ownership
+    were enforced by a check in a view instead of by the database, one forgotten
+    filter would hand one account's contacts and cashflow to another, silently,
+    while sync carried on looking perfectly healthy."""
+
+    def setUp(self):
+        cache.clear()
+        self.a = self.account("leonard")
+        self.b = self.account("sri")
+
+    def account(self, username):
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": username, "password": "a-long-passphrase-1"}),
+            content_type="application/json",
+        )
+        return body(r)["token"]
+
+    def push(self, token, rows):
+        return self.client.post(
+            "/sync",
+            data=json.dumps({"tables": {"people": rows}}),
+            content_type="application/json",
+            headers={"authorization": f"Bearer {token}"},
+        )
+
+    def pull(self, token):
+        r = self.client.get("/sync", headers={"authorization": f"Bearer {token}"})
+        return json.loads(r.content)["tables"]["people"]
+
+    def test_a_row_pushed_by_one_account_is_invisible_to_the_other(self):
+        self.push(self.a, [{"id": "row-1", "name": "Pak Andi"}])
+        self.assertEqual([p["name"] for p in self.pull(self.a)], ["Pak Andi"])
+        self.assertEqual(self.pull(self.b), [])
+
+    def test_one_account_cannot_overwrite_another_row_by_reusing_its_id(self):
+        # ⚠ The attack the old code was open to: update_or_create(id=pk) with
+        # no owner in the lookup found the other account's row and overwrote it.
+        self.push(self.a, [{"id": "row-1", "name": "Pak Andi"}])
+        self.push(self.b, [{"id": "row-1", "name": "Hijacked"}])
+
+        self.assertEqual([p["name"] for p in self.pull(self.a)], ["Pak Andi"])
+        self.assertEqual([p["name"] for p in self.pull(self.b)], ["Hijacked"])
+
+    def test_both_accounts_can_hold_the_same_seeded_occasion_id(self):
+        # ⚠ Not a hypothetical. seededId() in the Dart is a UUID v5 of
+        # name+date, so every device on earth derives the SAME id for 中秋节
+        # 2026. Globally unique ids would make the second account's entire
+        # festival calendar collide and vanish.
+        seeded = "b1946ac9-2492-4c1e-9e10-0fa71e1f9f7f"
+        for token in (self.a, self.b):
+            r = self.client.post(
+                "/sync",
+                data=json.dumps(
+                    {"tables": {"occasions": [
+                        {"id": seeded, "name": "中秋节", "date": "2026-09-25T00:00:00Z",
+                         "tag": "midAutumn"}
+                    ]}}
+                ),
+                content_type="application/json",
+                headers={"authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(r.status_code, 200)
+
+        for token in (self.a, self.b):
+            r = self.client.get("/sync", headers={"authorization": f"Bearer {token}"})
+            rows = json.loads(r.content)["tables"]["occasions"]
+            self.assertEqual([o["id"] for o in rows], [seeded])
+
+    def test_a_row_with_no_owner_is_returned_to_nobody(self):
+        # ⚠ Fail closed. If a bug ever creates an ownerless row it must be
+        # invisible, not public.
+        Person.objects.create(client_id="orphan", name="Nobody", owner=None)
+        self.assertEqual(self.pull(self.a), [])
+        self.assertEqual(self.pull(self.b), [])
+
+    def test_deleting_an_account_takes_its_rows_with_it(self):
+        self.push(self.a, [{"id": "row-1", "name": "Pak Andi"}])
+        User.objects.get(username="leonard").delete()
+        self.assertEqual(Person.objects.filter(client_id="row-1").count(), 0)
