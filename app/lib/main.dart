@@ -53,7 +53,7 @@ Future<void> _setUpWindow() async {
       // made fixed-width control rows overflow.
       size: Size(1180, 760),
       minimumSize: Size(960, 600),
-      title: 'Personal CRM',
+      title: 'Personal',
       titleBarStyle: TitleBarStyle.hidden,
       backgroundColor: Colors.transparent,
     ),
@@ -117,7 +117,7 @@ class _AppState extends State<App> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'Personal CRM',
+        title: 'Personal',
         debugShowCheckedModeBanner: false,
         // Follows the system. No in-app toggle.
         themeMode: ThemeMode.system,

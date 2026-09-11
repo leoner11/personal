@@ -1,0 +1,28 @@
+# ⚠ Caddy is here for TLS, and TLS is not optional: the bearer token rides in a
+# header on every sync request, and phone sync happens on cafe and airport wifi.
+# Caddy obtains and renews a Let's Encrypt certificate on its own.
+#
+# Replace crm.example.com with your domain, and point its A record at the
+# droplet BEFORE starting Caddy — certificate issuance needs the name to
+# resolve here.
+crm.example.com {
+	encode zstd gzip
+
+	# ⚠ Tells Django the request arrived over TLS. Without it
+	# SECURE_SSL_REDIRECT sees plain http from the proxy and redirects forever.
+	reverse_proxy unix//run/personal-crm/gunicorn.sock {
+		header_up X-Forwarded-Proto https
+	}
+
+	# The sync payload is the whole database on a first sync. The default 10MB
+	# is enough for one person, but say so rather than discover it.
+	request_body {
+		max_size 25MB
+	}
+
+	log {
+		output file /var/log/caddy/personal-crm.log
+		# ⚠ fail2ban reads this. The in-process login throttle is per-worker
+		# and in memory; this is what actually stops a distributed attempt.
+	}
+}

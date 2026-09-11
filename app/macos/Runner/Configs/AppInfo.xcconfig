@@ -5,9 +5,17 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = personal_crm
+PRODUCT_NAME = Personal
 
 // The application's bundle identifier
+// ⚠ DO NOT CHANGE THIS. A sandboxed macOS app's container is keyed by bundle
+// identifier: the database lives at
+//   ~/Library/Containers/com.mjcxstudio.personalCrm/Data/Documents/
+// Change the identifier and the app starts in an empty container, seeds a
+// fresh calendar, and every contact, note and money row is simply gone — the
+// old file still on disk under a name nothing looks at. Renaming the app to
+// "Personal" changes PRODUCT_NAME only, which is the .app filename and the
+// menu-bar name, and touches nothing on disk.
 PRODUCT_BUNDLE_IDENTIFIER = com.mjcxstudio.personalCrm
 
 // The copyright displayed in application information

@@ -25,7 +25,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ⚠ From the environment, because this repository is public. Django signs
 # sessions, CSRF tokens and password-reset links with this; a published key
 # means anyone can forge them. Set DJANGO_SECRET_KEY on the VPS alongside
-# SYNC_TOKEN. The fallback is for local development only and is marked
+# alongside REGISTRATION_SECRET if you use one. The fallback is for local
+# development only and is marked
 # insecure so Django's own deployment check flags it.
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY", "django-insecure-local-development-only")
@@ -106,10 +107,22 @@ WSGI_APPLICATION = 'crm.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+# ⚠ Outside the checkout on a server. BASE_DIR is the git working tree, so a
+# database living there is one `git clean` or a redeploy-by-reclone away from
+# being deleted. DJANGO_DB_PATH points at /srv/personal-crm/data/db.sqlite3,
+# which nothing but backups touches.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.environ.get("DJANGO_DB_PATH", BASE_DIR / 'db.sqlite3'),
+        'OPTIONS': {
+            # ⚠ WAL, and a busy timeout. Two gunicorn workers on one SQLite
+            # file will occasionally want it at once; without a timeout the
+            # loser raises "database is locked" instead of waiting the few
+            # milliseconds the winner needs.
+            'init_command': 'PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;',
+            'timeout': 20,
+        },
     }
 }
 

@@ -64,7 +64,45 @@ In the app: **Review → Account** on the phone, or click the sync line in the
 Mac sidebar → *Create an account*. Leave the invite code blank unless you set
 `REGISTRATION_SECRET`. Every later device uses **Sign in**.
 
-## Deploying
+## Deploying to a $4 droplet
+
+Ubuntu, 512MB / 1 vCPU / 10GB. That is enough for one person and SQLite, with
+two caveats the scripts handle:
+
+- ⚠ **Swap is not optional.** 512MB with no swap OOM-kills pip part way through
+  installing Django and leaves a venv that looks complete and is not.
+  `bootstrap.sh` adds 1GB.
+- ⚠ **Two gunicorn workers, not `(2*cores)+1`.** One SQLite file and one user:
+  more workers buy nothing, multiply write-lock contention, and cost ~60MB each.
+
+Point the domain's A record at the droplet **first** — Caddy asks Let's Encrypt
+for a certificate on first start and issuance fails if the name does not
+already resolve there.
+
+```bash
+ssh root@<droplet-ip>
+git clone https://github.com/leoner11/personal.git /srv/personal-crm
+DOMAIN=crm.example.com bash /srv/personal-crm/server/deploy/bootstrap.sh
+```
+
+That installs Caddy, gunicorn behind a unix socket, a `crm` system user, ufw
+(22/80/443 only), a systemd unit, generated secrets in `/etc/personal-crm.env`,
+and a daily `sqlite3 .backup` keeping 14 days. It is safe to re-run.
+
+Redeploy after pushing: `bash /srv/personal-crm/server/deploy/update.sh` —
+it backs the database up *before* migrating, then restarts.
+
+| File | What it is |
+|---|---|
+| `deploy/bootstrap.sh` | One-shot droplet setup |
+| `deploy/update.sh` | Pull, migrate, restart |
+| `deploy/Caddyfile` | TLS and the proxy header Django needs |
+| `deploy/personal-crm.service` | systemd unit, hardened |
+
+⚠ The database lives at `/srv/personal-crm/data/db.sqlite3`, **outside the git
+checkout** — inside it, one `git clean` or a redeploy-by-reclone deletes it.
+
+### Environment
 
 ```bash
 export DJANGO_SECRET_KEY=$(python3 -c 'import secrets;print(secrets.token_urlsafe(50))')
@@ -103,7 +141,7 @@ URL rather than leak over it; put Caddy in front and let it do TLS.
 ```
 GET  /sync?since=<iso8601>   -> every row changed since then, all tables
 POST /sync                   -> a batch of local changes, returns stamped rows
-Authorization: Bearer <SYNC_TOKEN>
+Authorization: Bearer <token from /auth/login>
 ```
 
 ⚠ **The server stamps `updated_at`. Clients never set it.** Verified: a client
@@ -113,12 +151,23 @@ because two devices disagree about the time.
 
 ⚠ **Soft deletes only.** Nothing ever issues a `DELETE`.
 
-## Deploy (not done yet)
-
-1. VPS, Caddy in front for automatic TLS.
-2. `SYNC_TOKEN` in the environment — **change it from the default.**
-3. Nightly copy of `db.sqlite3` to somewhere off the box.
-4. Point `app/lib/domain/config.dart` at the host, rebuild the Mac app.
+## Operating it
 
 ⚠ Do not SSH in and hand-edit rows. Two devices out of sync is debuggable;
 three, where one was edited behind the app's back, is not.
+
+The backups in `/srv/personal-crm/data/backups/` are on the same droplet, which
+is a backup of the application and not of the machine. ⚠ Pull one off the box
+periodically — one `scp` — or a destroyed droplet takes them with it:
+
+```bash
+scp root@<droplet>:/srv/personal-crm/data/backups/db-$(date +%F).sqlite3 ~/Backups/
+```
+
+Useful:
+
+```bash
+systemctl status personal-crm
+journalctl -u personal-crm -n 50 --no-pager
+journalctl -u caddy -n 50 --no-pager       # TLS issuance problems show here
+```

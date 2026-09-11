@@ -1,0 +1,38 @@
+[Unit]
+Description=Personal CRM sync server
+After=network.target
+
+[Service]
+Type=notify
+User=crm
+Group=crm
+WorkingDirectory=/srv/personal-crm/server
+EnvironmentFile=/etc/personal-crm.env
+RuntimeDirectory=personal-crm
+RuntimeDirectoryMode=0755
+
+# ⚠ TWO workers, not the usual (2*cores)+1. The database is SQLite on one file
+# and this serves one person: more workers buy nothing and multiply write-lock
+# contention. On a 512MB droplet they also each cost ~60MB.
+ExecStart=/srv/personal-crm/venv/bin/gunicorn crm.wsgi:application \
+    --workers 2 \
+    --bind unix:/run/personal-crm/gunicorn.sock \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile -
+
+Restart=always
+RestartSec=5
+
+# Hardening. The process needs its own directory and nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/personal-crm/data
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

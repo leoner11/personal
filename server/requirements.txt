@@ -1,0 +1,4 @@
+# Pinned. An unpinned deploy that works today and breaks on a rebuild in six
+# months is worse than an old version that keeps working.
+Django==6.1.1
+gunicorn==23.0.0
