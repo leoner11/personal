@@ -24,6 +24,10 @@ Future<void> main() async {
   // notification from scratch. ⚠ Both are load-bearing: an empty calendar and
   // a wiped schedule look identical to a normal quiet day.
   await seedIfEmpty(db);
+  // ⚠ And top up anything added to the seed since this database was created.
+  // Without it a new occasion tag is visible on the capture screen while the
+  // calendar behind it stays empty, and nothing ever fires.
+  await backfillSeedOccasions(db);
   final notifier = Notifier(db);
   await notifier.init();
   await notifier.rescheduleAll();

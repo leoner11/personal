@@ -11,6 +11,8 @@ enum OccasionTag {
   christmas('Christmas', 'ID/MY Christian, some intl'),
   deepavali('Deepavali', 'MY Indian'),
   idulAdha('Idul Adha', 'ID/MY Muslim'),
+  duanwu('端午节 Dragon Boat', 'CN'),
+  guoqing('国庆节 National Day', 'CN'),
   newYear('New Year', 'safe universal fallback');
 
   const OccasionTag(this.label, this.hint);
@@ -81,6 +83,9 @@ const kGreetings = <OccasionTag, Map<String, String>>{
 final kSeedOccasions = <(String, DateTime, OccasionTag, String)>[
   // ── 2026 ──
   ('中秋节 Mid-Autumn', DateTime(2026, 9, 25), OccasionTag.midAutumn, 'CN'),
+  // ⚠ No 端午节 2026 — it fell on 19 June, already past. The seed only ever
+  // carries occasions still ahead of it, same as the rest of this 2026 block.
+  ('国庆节 National Day', DateTime(2026, 10, 1), OccasionTag.guoqing, 'CN'),
   ('Deepavali', DateTime(2026, 11, 8), OccasionTag.deepavali, 'MY'),
   ('Christmas', DateTime(2026, 12, 25), OccasionTag.christmas, 'INTL'),
   // ── 2027 ──
@@ -88,7 +93,9 @@ final kSeedOccasions = <(String, DateTime, OccasionTag, String)>[
   ('春节 Chinese New Year', DateTime(2027, 2, 6), OccasionTag.cny, 'CN'),
   ('Lebaran / Aidilfitri', DateTime(2027, 3, 9), OccasionTag.lebaran, 'ID/MY'),
   ('Idul Adha', DateTime(2027, 5, 16), OccasionTag.idulAdha, 'ID/MY'),
+  ('端午节 Dragon Boat', DateTime(2027, 6, 9), OccasionTag.duanwu, 'CN'),
   ('中秋节 Mid-Autumn', DateTime(2027, 9, 15), OccasionTag.midAutumn, 'CN'),
+  ('国庆节 National Day', DateTime(2027, 10, 1), OccasionTag.guoqing, 'CN'),
   ('Deepavali', DateTime(2027, 10, 29), OccasionTag.deepavali, 'MY'),
   ('Christmas', DateTime(2027, 12, 25), OccasionTag.christmas, 'INTL'),
   // ── 2028 ──
@@ -96,7 +103,9 @@ final kSeedOccasions = <(String, DateTime, OccasionTag, String)>[
   ('春节 Chinese New Year', DateTime(2028, 1, 26), OccasionTag.cny, 'CN'),
   ('Lebaran / Aidilfitri', DateTime(2028, 2, 26), OccasionTag.lebaran, 'ID/MY'),
   ('Idul Adha', DateTime(2028, 5, 5), OccasionTag.idulAdha, 'ID/MY'),
+  ('端午节 Dragon Boat', DateTime(2028, 5, 28), OccasionTag.duanwu, 'CN'),
   ('中秋节 Mid-Autumn', DateTime(2028, 10, 3), OccasionTag.midAutumn, 'CN'),
+  ('国庆节 National Day', DateTime(2028, 10, 1), OccasionTag.guoqing, 'CN'),
   ('Deepavali', DateTime(2028, 11, 15), OccasionTag.deepavali, 'MY'),
   ('Christmas', DateTime(2028, 12, 25), OccasionTag.christmas, 'INTL'),
   // ── 2029, so the runway warning stays quiet for a full two years ──

@@ -233,6 +233,42 @@ class Notifier {
 /// is what a duplicated string does.
 String taggedLabel(int n) => '$n ${n == 1 ? 'person' : 'people'} tagged';
 
+/// Adds seeded occasions that are missing, without disturbing what is there.
+///
+/// ⚠ WHY THIS EXISTS. [seedIfEmpty] runs only on a virgin database, so adding
+/// a row to kSeedOccasions reaches a new install and no existing one. The tag
+/// would appear on the capture screen, people would get tagged with it, and no
+/// notification would ever fire — because the calendar has no row to fire
+/// from. Exactly the armed-and-dead shape this project keeps designing against.
+///
+/// ⚠ MATCHED ON (tag, year), NOT on the deterministic id. The id is derived
+/// from name+date, so a hand-corrected date — which the v4 migration comment
+/// exists specifically to protect — would stop matching and this would
+/// resurrect the original alongside it as a duplicate.
+///
+/// ⚠ Deleted occasions stay deleted. A soft-deleted row still occupies its
+/// (tag, year), so nothing here brings it back.
+Future<int> backfillSeedOccasions(AppDatabase db) async {
+  final rows = await db.select(db.occasions).get(); // includes soft-deleted
+  final taken = {for (final o in rows) (o.tag, o.date.year)};
+
+  var added = 0;
+  for (final row in kSeedOccasions) {
+    final key = (row.$3.name, row.$2.year);
+    if (taken.contains(key)) continue;
+    await db.into(db.occasions).insert(OccasionsCompanion.insert(
+          id: Value(seededId(occasionSeedKey(row.$1, row.$2))),
+          name: row.$1,
+          date: row.$2,
+          tag: row.$3.name,
+          country: Value(row.$4),
+        ));
+    taken.add(key);
+    added++;
+  }
+  return added;
+}
+
 /// Seeds the occasion calendar if it is empty. ⚠ Three years, not one.
 Future<void> seedIfEmpty(AppDatabase db) async {
   final existing = await db.allOccasions();

@@ -1,8 +1,10 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:personal_crm/domain/config.dart';
 import 'package:personal_crm/data/database.dart';
+import 'package:personal_crm/domain/config.dart';
+import 'package:personal_crm/domain/notifications.dart';
+import 'package:personal_crm/domain/occasions.dart';
 
 /// Regressions for the column-exists-but-feature-missing audit.
 void main() {
@@ -170,6 +172,65 @@ void main() {
 
     test('empty stays local-only, which is the default state', () {
       expect(syncEnabledFor(''), isFalse);
+    });
+  });
+
+  group('backfillSeedOccasions', () {
+    late AppDatabase db;
+    setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
+    tearDown(() => db.close());
+
+    test('tops up a calendar seeded before a tag existed', () async {
+      // The real situation: a database seeded when the set was seven tags.
+      for (final row in kSeedOccasions.where(
+          (r) => r.$3 != OccasionTag.duanwu && r.$3 != OccasionTag.guoqing)) {
+        await db.into(db.occasions).insert(OccasionsCompanion.insert(
+              id: Value(seededId(occasionSeedKey(row.$1, row.$2))),
+              name: row.$1,
+              date: row.$2,
+              tag: row.$3.name,
+              country: Value(row.$4),
+            ));
+      }
+      final before = (await db.allOccasions()).length;
+
+      final added = await backfillSeedOccasions(db);
+      expect(added, 5, reason: '端午节 x2 + 国庆节 x3');
+      expect((await db.allOccasions()).length, before + 5);
+    });
+
+    test('is idempotent — a second run adds nothing', () async {
+      await seedIfEmpty(db);
+      expect(await backfillSeedOccasions(db), 0);
+      expect(await backfillSeedOccasions(db), 0);
+    });
+
+    test('a hand-corrected date is not duplicated', () async {
+      // ⚠ The trap. Ids are derived from name+date, so matching on id would
+      // see an edited row as missing and re-add the original beside it. The
+      // v4 migration comment exists to protect these corrections.
+      await seedIfEmpty(db);
+      final target = (await db.allOccasions())
+          .firstWhere((o) => o.tag == OccasionTag.duanwu.name);
+      await (db.update(db.occasions)..where((t) => t.id.equals(target.id)))
+          .write(OccasionsCompanion(date: Value(DateTime(2027, 6, 10))));
+
+      expect(await backfillSeedOccasions(db), 0);
+      expect(
+          (await db.allOccasions())
+              .where((o) => o.tag == OccasionTag.duanwu.name && o.date.year == 2027)
+              .length,
+          1);
+    });
+
+    test('a deleted occasion stays deleted', () async {
+      await seedIfEmpty(db);
+      final target = (await db.allOccasions())
+          .firstWhere((o) => o.tag == OccasionTag.guoqing.name);
+      await db.softDeleteRow(db.occasions, target.id);
+
+      expect(await backfillSeedOccasions(db), 0,
+          reason: 'a soft-deleted row still occupies its (tag, year)');
     });
   });
 }

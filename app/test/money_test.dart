@@ -72,6 +72,36 @@ void main() {
       }
     });
 
+    test('one occasion per tag per year, never two', () {
+      // ⚠ backfillSeedOccasions dedupes on (tag, year). A seed carrying two
+      // rows for one tag in one year would leave the second permanently
+      // unseeded on an existing database, silently.
+      final seen = <(String, int)>{};
+      for (final row in kSeedOccasions) {
+        final key = (row.$3.name, row.$2.year);
+        expect(seen.contains(key), isFalse,
+            reason: '${row.$1} duplicates ${row.$3.name} in ${row.$2.year}');
+        seen.add(key);
+      }
+    });
+
+    test('the two CN additions are seeded for the years still ahead', () {
+      // 端午节 2026 fell on 19 June and is deliberately absent.
+      final duanwu = kSeedOccasions
+          .where((e) => e.$3 == OccasionTag.duanwu)
+          .map((e) => e.$2.year)
+          .toList();
+      expect(duanwu, [2027, 2028]);
+
+      // 国庆节 is a fixed date, so every year it is seeded for is 1 October.
+      final guoqing =
+          kSeedOccasions.where((e) => e.$3 == OccasionTag.guoqing).toList();
+      expect(guoqing.map((e) => e.$2.year).toList(), [2026, 2027, 2028]);
+      for (final g in guoqing) {
+        expect((g.$2.month, g.$2.day), (10, 1));
+      }
+    });
+
     test('中秋节 2026 seed matches the hardcoded Phase 1 constant', () {
       final midAutumn2026 = kSeedOccasions.firstWhere(
           (e) => e.$3 == OccasionTag.midAutumn && e.$2.year == 2026);
