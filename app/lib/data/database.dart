@@ -256,6 +256,21 @@ class AppDatabase extends _$AppDatabase {
 
   Future<int> addPerson(PeopleCompanion p) => into(people).insert(p);
 
+  /// ⚠ The one write this app went without for far too long. `money`, `notes`
+  /// and `engagements` all had an update path; `people` — the table the whole
+  /// app exists for — did not, so a name, a number or an occasion tag was
+  /// write-once at capture and a typo was permanent.
+  ///
+  /// ⚠ Updates IN PLACE, keeping the id. The workaround it replaces was delete
+  /// and re-add, which mints a new UUID: every touch, note and money row still
+  /// points at the old id and silently detaches from the person.
+  ///
+  /// ⚠ Stamps updatedAt, like every other write here. Without it the row never
+  /// syncs — the server pulls on `updated_at > since` and would never see it.
+  Future<void> updatePerson(String id, PeopleCompanion patch) =>
+      (update(people)..where((p) => p.id.equals(id)))
+          .write(patch.copyWith(updatedAt: Value(DateTime.now())));
+
   Future<void> softDelete(String id) => (update(people)..where((p) => p.id.equals(id)))
       .write(PeopleCompanion(
         deletedAt: Value(DateTime.now()),

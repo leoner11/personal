@@ -177,6 +177,14 @@ class _PeopleScreenState extends State<PeopleScreen> {
               variant: BtnVariant.secondary,
               onPressed: () => copyWeChatId(p.wechatId!)),
         const SizedBox(width: 6),
+        // ⚠ Before this existed the only thing you could do to a person was
+        // delete them — and delete is soft, so the workaround minted a new
+        // UUID and silently detached every touch, note and money row that
+        // pointed at the old one.
+        Btn('Edit',
+            variant: BtnVariant.secondary,
+            onPressed: () => AddPersonSheet.show(context, widget.db, existing: p)),
+        const SizedBox(width: 6),
         DeleteAction(
           what: p.name,
           size: BtnSize.md,
@@ -191,7 +199,12 @@ class _PeopleScreenState extends State<PeopleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _kv('CHANNEL', isWa ? 'WhatsApp · ${p.waNumber}' : 'WeChat · ${p.wechatId}', t),
+              // ⚠ Was 'WhatsApp · ${p.waNumber}' unconditionally, which
+              // renders the literal text "WhatsApp · null" for anyone without
+              // a number. preferredChannel defaults to 'wa' whether or not a
+              // number was ever given, so the default is exactly the case that
+              // printed null.
+              _kv('CHANNEL', _channelLine(p), t),
               const SizedBox(height: 8),
               Text('OCCASIONS',
                   style: T.micro.copyWith(color: t.textMuted, letterSpacing: 0.5)),
@@ -259,6 +272,17 @@ class _PeopleScreenState extends State<PeopleScreen> {
         _Timeline(db: widget.db, personId: p.id, onLog: _refreshTouches),
       ]),
     );
+  }
+
+  static String _channelLine(Person p) {
+    final wa = p.waNumber ?? '';
+    final wechat = p.wechatId ?? '';
+    if (wa.isEmpty && wechat.isEmpty) return 'none — cannot be messaged';
+    return channelFrom(p.preferredChannel) == Channel.wa && wa.isNotEmpty
+        ? 'WhatsApp · $wa'
+        : wechat.isNotEmpty
+            ? 'WeChat · $wechat'
+            : 'WhatsApp · $wa';
   }
 
   Widget _kv(String k, String v, AppTokens t) => Column(

@@ -4,6 +4,7 @@ import '../../domain/channel.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/occasions.dart';
 import '../../theme/tokens.dart';
+import 'edit_person_sheet.dart';
 import 'phone_primitives.dart';
 
 /// D6 — the person timeline, plus log-a-touch. ⚠ Logging a touch is the one
@@ -64,9 +65,16 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                 ? null
                 : Text(p.company!,
                     style: PT.secondary.copyWith(color: t.textSecondary)),
-            trailing: PhoneBtn('Back',
-                variant: PhoneBtnVariant.ghost,
-                onPressed: () => Navigator.of(context).pop()),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              PhoneBtn('Edit',
+                  variant: PhoneBtnVariant.ghost,
+                  onPressed: () => PhoneSheet.show<bool>(
+                      context, (_) => PhoneEditPersonSheet(db: widget.db, person: p))),
+              const SizedBox(width: 4),
+              PhoneBtn('Back',
+                  variant: PhoneBtnVariant.ghost,
+                  onPressed: () => Navigator.of(context).pop()),
+            ]),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
                   PD.screenPad, 0, PD.screenPad, PD.sectionGap),
