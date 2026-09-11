@@ -8,3 +8,11 @@ app/macos/Flutter/GeneratedPluginRegistrant.swift
 server/.venv/
 server/db.sqlite3
 server/**/__pycache__/
+
+# ⚠ Planning and handoff documents — deliberately NOT published.
+# They describe the author, the company, the client regions and the actual
+# deals, and this repository is public. They stay on disk as the project's
+# memory; they are simply not tracked. Root level only, so the technical
+# READMEs under app/ and server/ are unaffected.
+/*.md
+!/README.md

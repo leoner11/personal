@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,7 +21,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-8qrl3lg-0gg0qn&2nhdu4$c%22go9$!9a@#*sq3euo*ex-y)oz'
+#
+# ⚠ From the environment, because this repository is public. Django signs
+# sessions, CSRF tokens and password-reset links with this; a published key
+# means anyone can forge them. Set DJANGO_SECRET_KEY on the VPS alongside
+# SYNC_TOKEN. The fallback is for local development only and is marked
+# insecure so Django's own deployment check flags it.
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY", "django-insecure-local-development-only")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -127,8 +135,6 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
-
-import os
 
 # ⚠ One hardcoded bearer token. Set SYNC_TOKEN in the environment on the VPS.
 # Minimal on purpose, but not optional: an open API on a public IP is found by
