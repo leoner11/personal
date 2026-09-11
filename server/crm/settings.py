@@ -24,10 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 #
 # ⚠ From the environment, because this repository is public. Django signs
 # sessions, CSRF tokens and password-reset links with this; a published key
-# means anyone can forge them. Set DJANGO_SECRET_KEY on the VPS alongside
-# alongside REGISTRATION_SECRET if you use one. The fallback is for local
-# development only and is marked
-# insecure so Django's own deployment check flags it.
+# means anyone can forge them. bootstrap.sh generates one into
+# /etc/personal-crm.env. The fallback is for local development only, and is
+# marked insecure so Django's own deployment check flags it.
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY", "django-insecure-local-development-only")
 
