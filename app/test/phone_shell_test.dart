@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_crm/data/database.dart';
+import 'package:personal_crm/domain/notifications.dart';
 import 'package:personal_crm/main.dart';
 import 'package:personal_crm/theme/tokens.dart';
 import 'package:personal_crm/ui/phone/capture_screen.dart';
@@ -48,6 +49,15 @@ void main() {
     await tester.pump();
   }
 
+  /// ⚠ Assert on the IndexedStack index, never on what is findable.
+  ///
+  /// Every tab stays mounted in an IndexedStack, and the bottom bar renders
+  /// the word "Today" whichever tab is showing — so `find.byType(TodayScreen)`
+  /// and `find.text('Today')` are both true always. Two tests here used to do
+  /// exactly that and could not have failed.
+  PhoneTab currentTab(WidgetTester tester) => PhoneTab.values[
+      tester.widget<IndexedStack>(find.byType(IndexedStack)).index!];
+
   /// ⚠ Unmount the tree INSIDE the test, not at teardown.
   ///
   /// Disposing a drift StreamBuilder cancels its query stream, and that cancel
@@ -72,17 +82,58 @@ void main() {
 
     // ⚠ The app's stated failure mode is that capture stops happening by week
     // three. Landing anywhere else is the regression this guards.
-    expect(find.byType(CaptureScreen), findsOneWidget);
+    expect(currentTab(tester), PhoneTab.capture);
     await unmount(tester);
   });
 
-  testWidgets('a notification tap can route straight to Today', (tester) async {
-    // B1 -> B2 must stay a two-step loop.
-    await tester.pumpWidget(host(PhoneShell(db: db, initial: PhoneTab.today)));
-    await tester.pump();
+  group('a notification tap routes straight to Today', () {
+    // B1 -> B2 must stay a two-step loop. Two different mechanisms reach it,
+    // so both are pinned — the warm one had no caller at all until now.
 
-    expect(find.text('Today'), findsWidgets);
-    await unmount(tester);
+    testWidgets('cold launch — main() passes the tab in', (tester) async {
+      await tester.pumpWidget(host(PhoneShell(db: db, initial: PhoneTab.today)));
+      await tester.pump();
+
+      expect(currentTab(tester), PhoneTab.today);
+      await unmount(tester);
+    });
+
+    testWidgets('warm tap — the app is already running on Capture',
+        (tester) async {
+      await tester.pumpWidget(host(PhoneShell(db: db)));
+      await tester.pump();
+      expect(currentTab(tester), PhoneTab.capture);
+
+      // What Notifier's onDidReceiveNotificationResponse does. ⚠ Until this
+      // was wired, tapping a reminder surfaced the app on whatever tab it was
+      // left on — Capture — and the loop the app exists for died at step one.
+      notificationTaps.value++;
+      await tester.pump();
+
+      expect(currentTab(tester), PhoneTab.today);
+      await unmount(tester);
+    });
+
+    testWidgets('a second tap still lands, having already been to Today',
+        (tester) async {
+      // ⚠ Why notificationTaps is a counter and not a flag: a ValueNotifier
+      // only fires on a CHANGE, so setting a bool true twice is silent the
+      // second time.
+      await tester.pumpWidget(host(PhoneShell(db: db)));
+      await tester.pump();
+
+      notificationTaps.value++;
+      await tester.pump();
+      // Wander off to People the way a real user would.
+      await tester.tap(find.text('People'));
+      await tester.pump();
+      expect(currentTab(tester), PhoneTab.people);
+
+      notificationTaps.value++;
+      await tester.pump();
+      expect(currentTab(tester), PhoneTab.today);
+      await unmount(tester);
+    });
   });
 
   testWidgets('leaving the foreground rebuilds the notification schedule',

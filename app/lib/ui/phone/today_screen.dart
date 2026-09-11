@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
+import '../../domain/notifications.dart';
 import '../../domain/today.dart';
 import '../../theme/tokens.dart';
 import 'occasion_run_screen.dart';
@@ -98,7 +99,7 @@ class _PhoneTodayScreenState extends State<PhoneTodayScreen> {
                               ]),
                               const SizedBox(height: 4),
                               Text(
-                                  '${d.taggedCounts[o.tag] ?? 0} people tagged · ${fmtDate(o.date)}',
+                                  '${taggedLabel(d.taggedCounts[o.tag] ?? 0)} · ${fmtDate(o.date)}',
                                   style: PT.secondary
                                       .copyWith(color: t.textSecondary)),
                             ],

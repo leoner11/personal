@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_crm/domain/money_fmt.dart';
+import 'package:personal_crm/domain/notifications.dart';
 import 'package:personal_crm/domain/occasions.dart';
 
 void main() {
@@ -39,6 +40,18 @@ void main() {
       expect(fmtIn(DateTime(n.year, n.month, n.day)), 'today');
       expect(fmtIn(DateTime(n.year, n.month, n.day).add(const Duration(days: 1))),
           'tomorrow');
+    });
+  });
+
+  group('taggedLabel', () {
+    // ⚠ This string is read by a human — on a lock screen months from now, or
+    // on the Today card the notification opens onto. It was fixed in the
+    // notification body on 10 Sep and stayed broken on both Today screens
+    // until 11 Sep, because it was written out three times.
+    test('one person is a person', () => expect(taggedLabel(1), '1 person tagged'));
+    test('everything else is people', () {
+      expect(taggedLabel(0), '0 people tagged');
+      expect(taggedLabel(2), '2 people tagged');
     });
   });
 

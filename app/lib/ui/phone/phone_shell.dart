@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
+import '../../domain/notifications.dart';
 import '../../theme/tokens.dart';
 import 'capture_screen.dart';
 import 'people_screen.dart';
@@ -17,6 +18,12 @@ enum PhoneTab { capture, today, people }
 ///
 /// ⚠ The exception: a notification tap must route straight to Today. B1 → B2
 /// is a two-step loop and it has to stay two steps. See [openTo].
+///
+/// Both directions of that tap are covered, and they are different mechanisms:
+///   - **Cold launch** — the process did not exist when the tap happened, so
+///     `main()` asks the plugin after the fact and passes [initial].
+///   - **Warm tap** — the app was already running, so the plugin's response
+///     callback bumps [notificationTaps] and the listener below reacts.
 class PhoneShell extends StatefulWidget {
   const PhoneShell({super.key, required this.db, this.initial = PhoneTab.capture});
   final AppDatabase db;
@@ -29,9 +36,25 @@ class PhoneShell extends StatefulWidget {
 class PhoneShellState extends State<PhoneShell> {
   late PhoneTab _tab = widget.initial;
 
-  /// Entry point for a notification tap. Stage 2 wires the plugin's response
-  /// callback to this; until then Today is one tap away regardless.
+  /// Entry point for a notification tap.
   void openTo(PhoneTab tab) => setState(() => _tab = tab);
+
+  @override
+  void initState() {
+    super.initState();
+    notificationTaps.addListener(_onNotificationTap);
+  }
+
+  @override
+  void dispose() {
+    notificationTaps.removeListener(_onNotificationTap);
+    super.dispose();
+  }
+
+  /// ⚠ The tap has to win over wherever the app was left. Someone who taps a
+  /// 中秋节 reminder and lands on a half-typed capture form has been given the
+  /// wrong screen at the one moment the app had their attention.
+  void _onNotificationTap() => openTo(PhoneTab.today);
 
   @override
   Widget build(BuildContext context) {

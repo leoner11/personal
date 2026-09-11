@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -33,6 +34,16 @@ int notificationId(String uuid, int slot) {
 /// already establishes that a global constant beats a settings screen here.
 Notifier? appNotifier;
 
+/// Bumped every time the user taps a notification while the app is already
+/// running. `PhoneShell` listens and switches to Today.
+///
+/// ⚠ A counter, not a bool or a tab: two taps in a row must both register, and
+/// a ValueNotifier only fires on a CHANGE. Setting a flag true twice is silent.
+///
+/// Cold launch does not come through here — the tap happened before anything
+/// was listening. See [launchedFromNotification], which `main()` reads once.
+final notificationTaps = ValueNotifier<int>(0);
+
 class Notifier {
   Notifier(this.db);
   final AppDatabase db;
@@ -49,6 +60,10 @@ class Notifier {
     // is running on are absent. All three are declared or the phone dies on
     // launch. iOS deliberately does NOT request here — see _checkReady().
     await _plugin.initialize(
+      // ⚠ Without this the tap is dead: the app comes to the foreground on
+      // whatever tab it was left on, which is Capture. B1 -> B2 is the loop
+      // the whole app exists for and the notification is its first step.
+      onDidReceiveNotificationResponse: (_) => notificationTaps.value++,
       settings: const InitializationSettings(
         macOS: DarwinInitializationSettings(
           requestAlertPermission: true,
@@ -144,10 +159,10 @@ class Notifier {
       // T-14 — the whole point. Gifts need lead time; a same-day
       // notification is useless and was the original complaint.
       n += await _at(notificationId(o.id, 1), o.date.subtract(const Duration(days: 14)),
-          '${o.name} in 2 weeks', _tagged(tagged));
+          '${o.name} in 2 weeks', taggedLabel(tagged));
       // T-3 — second pass for anyone still unmarked.
       n += await _at(notificationId(o.id, 2), o.date.subtract(const Duration(days: 3)),
-          '${o.name} in 3 days', _tagged(tagged));
+          '${o.name} in 3 days', taggedLabel(tagged));
       // T+1 — close-out. ⚠ Without this, expected rows accumulate forever and
       // the balance silently drifts from reality.
       n += await _at(notificationId(o.id, 3), o.date.add(const Duration(days: 1)),
@@ -194,13 +209,29 @@ class Notifier {
     return 1;
   }
 
+  /// Whether this launch was started by tapping a notification.
+  ///
+  /// ⚠ The warm-tap callback cannot cover this case — the process did not
+  /// exist when the tap happened, so the plugin holds the response and hands
+  /// it over on request instead. Read once, in `main()`, before the first
+  /// frame decides which tab to open on.
+  Future<bool> launchedFromNotification() async =>
+      (await _plugin.getNotificationAppLaunchDetails())
+          ?.didNotificationLaunchApp ??
+      false;
+
   Future<int> pendingCount() async =>
       (await _plugin.pendingNotificationRequests()).length;
 }
 
-/// ⚠ This string is the notification body — the text actually read, on a lock
-/// screen, months from now. "1 people tagged" is a tell that nobody ever looked.
-String _tagged(int n) => '$n ${n == 1 ? 'person' : 'people'} tagged';
+/// ⚠ This string is read by a human — on a lock screen months from now, or on
+/// the Today card the notification opens onto. "1 people tagged" is a tell that
+/// nobody ever looked.
+///
+/// Public and shared by all three callers on purpose: it was fixed in the
+/// notification body on 10 Sep and stayed broken on both Today screens, which
+/// is what a duplicated string does.
+String taggedLabel(int n) => '$n ${n == 1 ? 'person' : 'people'} tagged';
 
 /// Seeds the occasion calendar if it is empty. ⚠ Three years, not one.
 Future<void> seedIfEmpty(AppDatabase db) async {

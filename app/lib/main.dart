@@ -28,7 +28,12 @@ Future<void> main() async {
   await notifier.rescheduleAll();
   appNotifier = notifier;
 
-  runApp(App(db: db));
+  // ⚠ Read BEFORE the first frame. If the app was launched by tapping a
+  // reminder, the first screen must be Today — asking afterwards means the
+  // user watches it jump.
+  final fromNotification = await notifier.launchedFromNotification();
+
+  runApp(App(db: db, openOnToday: fromNotification));
 }
 
 Future<void> _setUpWindow() async {
@@ -49,8 +54,17 @@ Future<void> _setUpWindow() async {
 }
 
 class App extends StatefulWidget {
-  const App({super.key, required this.db, this.onPause});
+  const App({
+    super.key,
+    required this.db,
+    this.onPause,
+    this.openOnToday = false,
+  });
   final AppDatabase db;
+
+  /// True when this launch was started by tapping a notification. Phone only —
+  /// the desktop shell has no tabs to open onto.
+  final bool openOnToday;
 
   /// Seam for the test that this hook exists at all. Production leaves it
   /// null and the module-level [appNotifier] is used.
@@ -105,6 +119,12 @@ class _AppState extends State<App> {
         // survive a 390pt screen, and a responsive breakpoint between them
         // would mean the density table, the keyboard map and every hover
         // action had to work at both ends. They do not.
-        home: isDesktop ? Shell(db: widget.db) : PhoneShell(db: widget.db),
+        home: isDesktop
+            ? Shell(db: widget.db)
+            : PhoneShell(
+                db: widget.db,
+                initial:
+                    widget.openOnToday ? PhoneTab.today : PhoneTab.capture,
+              ),
       );
 }
