@@ -25,11 +25,20 @@ int notificationId(String uuid, int slot) {
   return ((h & 0x0fffffff) * 8) + (slot & 0x7);
 }
 
+/// The one [Notifier], set once in `main()`.
+///
+/// ⚠ Deliberately module-level rather than threaded through the widget tree.
+/// The only thing outside `main()` that needs it is the app-root lifecycle
+/// hook, and an InheritedWidget for a single consumer is scope. `config.dart`
+/// already establishes that a global constant beats a settings screen here.
+Notifier? appNotifier;
+
 class Notifier {
   Notifier(this.db);
   final AppDatabase db;
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
+  Future<int> _pass = Future.value(0);
 
   Future<void> init() async {
     tzdata.initializeTimeZones();
@@ -107,7 +116,20 @@ class Notifier {
   /// but are WIPED by a clean rebuild — macOS treats the freshly-signed .app
   /// as a different app. So this is not a safety net, it is the primary
   /// mechanism. Wipe and re-derive everything, every launch. Idempotent.
-  Future<int> rescheduleAll() async {
+  ///
+  /// ⚠ Idempotent, but NOT reentrant: the first thing it does is cancel
+  /// everything, so a second pass starting midway through the first would
+  /// wipe alarms the first pass had already re-added and then never replace
+  /// them. Now that the lifecycle hook can fire while the launch pass is still
+  /// running, calls are queued behind each other rather than overlapping.
+  Future<int> rescheduleAll() {
+    final pass = _pass.then((_) => _rescheduleAll());
+    // Swallow into the chain only — the caller still sees a failure.
+    _pass = pass.catchError((_) => 0);
+    return pass;
+  }
+
+  Future<int> _rescheduleAll() async {
     await _plugin.cancelAll();
 
     var n = 0;

@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,7 @@ Future<void> main() async {
   final notifier = Notifier(db);
   await notifier.init();
   await notifier.rescheduleAll();
+  appNotifier = notifier;
 
   runApp(App(db: db));
 }
@@ -46,9 +48,50 @@ Future<void> _setUpWindow() async {
   );
 }
 
-class App extends StatelessWidget {
-  const App({super.key, required this.db});
+class App extends StatefulWidget {
+  const App({super.key, required this.db, this.onPause});
   final AppDatabase db;
+
+  /// Seam for the test that this hook exists at all. Production leaves it
+  /// null and the module-level [appNotifier] is used.
+  final Future<void> Function()? onPause;
+
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> {
+  /// ⚠ THE SCHEDULE IS REBUILT WHEN THE APP LEAVES THE FOREGROUND, not only at
+  /// launch. Without this, a person captured during a session gets no
+  /// notifications until the app is next opened — and the phone's entire
+  /// interaction model is "capture in 10 seconds and close". Someone captured
+  /// 15 days before a festival, with the app never reopened, would silently
+  /// get nothing. That is the app's whole purpose failing quietly.
+  ///
+  /// One hook, so it catches every write in the session and cannot be
+  /// forgotten the way four post-write call sites could be.
+  ///
+  /// ⚠ NEVER await this on the capture path. It cancels and re-adds ~18
+  /// alarms, and the 10-second budget owns that screen. Here it is free: the
+  /// user has already left.
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onPause: _rescheduleInBackground);
+  }
+
+  void _rescheduleInBackground() {
+    final reschedule = widget.onPause ?? appNotifier?.rescheduleAll;
+    if (reschedule != null) unawaited(reschedule());
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -62,6 +105,6 @@ class App extends StatelessWidget {
         // survive a 390pt screen, and a responsive breakpoint between them
         // would mean the density table, the keyboard map and every hover
         // action had to work at both ends. They do not.
-        home: isDesktop ? Shell(db: db) : PhoneShell(db: db),
+        home: isDesktop ? Shell(db: widget.db) : PhoneShell(db: widget.db),
       );
 }

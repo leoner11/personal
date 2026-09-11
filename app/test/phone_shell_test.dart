@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_crm/data/database.dart';
+import 'package:personal_crm/main.dart';
 import 'package:personal_crm/theme/tokens.dart';
 import 'package:personal_crm/ui/phone/capture_screen.dart';
 import 'package:personal_crm/ui/phone/phone_shell.dart';
@@ -81,6 +82,33 @@ void main() {
     await tester.pump();
 
     expect(find.text('Today'), findsWidgets);
+    await unmount(tester);
+  });
+
+  testWidgets('leaving the foreground rebuilds the notification schedule',
+      (tester) async {
+    // ⚠ THE HOLE THIS CLOSES: rescheduleAll() used to have exactly one caller,
+    // main(). Capture someone 15 days before a festival, close the app without
+    // reopening it, and no alarm was ever set — on a phone, where the whole
+    // interaction model is "capture in 10 seconds and close", that is the
+    // normal case, not an edge one.
+    var passes = 0;
+    await tester.pumpWidget(App(db: db, onPause: () async => passes++));
+    await tester.pump();
+    expect(passes, 0, reason: 'nothing should reschedule while in use');
+
+    // The real transition Android makes on Home: resumed -> inactive ->
+    // hidden -> paused. AppLifecycleListener asserts on illegal jumps.
+    for (final state in const [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+
+    expect(passes, 1);
     await unmount(tester);
   });
 
