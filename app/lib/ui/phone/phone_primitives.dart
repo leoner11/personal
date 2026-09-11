@@ -344,3 +344,219 @@ class PhoneTag extends StatelessWidget {
         ),
       );
 }
+
+/// A modal bottom sheet, which is how every edit on the phone happens.
+///
+/// ⚠ Sheets, not pushes. The design spec allows nothing more than one push
+/// deep from a tab, and Review → Money → edit would be two. A sheet is a
+/// modal over the current screen, not another level of the stack.
+///
+/// Two things here are load-bearing on a phone and absent from the Mac dialog
+/// this replaces:
+///   - The whole sheet lifts by `viewInsets.bottom`, so the keyboard never
+///     covers the field being typed into.
+///   - [actions] are pinned below the scroll area, so Save stays reachable
+///     without scrolling to the end of a long form.
+class PhoneSheet extends StatelessWidget {
+  const PhoneSheet({
+    super.key,
+    required this.title,
+    required this.child,
+    this.actions,
+    this.expand = false,
+  });
+  final String title;
+  final Widget child;
+
+  /// Pinned to the bottom, above the keyboard. Usually Cancel + a primary.
+  final Widget? actions;
+
+  /// Take nearly the full screen and let [child] fill it — for the note
+  /// editor, which needs room to be a place you actually write.
+  final bool expand;
+
+  static Future<R?> show<R>(BuildContext context, WidgetBuilder builder) =>
+      showModalBottomSheet<R>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        // The form behind it is still the context; dismissing must not feel
+        // like leaving the screen.
+        barrierColor: Colors.black.withValues(alpha: 0.35),
+        builder: builder,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    final h = MediaQuery.sizeOf(context).height;
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PD.screenPad,
+        0,
+        PD.screenPad,
+        PD.sectionGap,
+      ),
+      child: child,
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      // ⚠ Material, not just a coloured Container — the same rule as
+      // [PhoneBody]. TextField asserts on a missing Material ancestor, and
+      // leaning on showModalBottomSheet to supply one makes every sheet here
+      // unusable on its own, including in a test.
+      child: Material(
+        color: t.canvas,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(D.radiusPanel * 2),
+        ),
+        child: Container(
+          constraints: BoxConstraints(maxHeight: h * (expand ? 0.94 : 0.88)),
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(D.radiusPanel * 2),
+            ),
+            border: Border.all(color: t.line),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // The grabber. The only ornament allowed here, and it earns its
+                // place: it is the affordance that says this can be dragged away.
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 10, bottom: 8),
+                    decoration: BoxDecoration(
+                      color: t.line,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    PD.screenPad,
+                    0,
+                    PD.screenPad,
+                    PD.groupGap,
+                  ),
+                  child: Text(
+                    title,
+                    style: PT.entityName.copyWith(color: t.textPrimary),
+                  ),
+                ),
+                if (expand)
+                  Expanded(child: body)
+                else
+                  Flexible(child: SingleChildScrollView(child: body)),
+                if (actions != null)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(
+                      PD.screenPad,
+                      10,
+                      PD.screenPad,
+                      10,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: t.line)),
+                    ),
+                    child: actions,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A tappable list row, one or two lines.
+///
+/// ⚠ Nothing here is hover-conditional — see the note at the top of this file.
+/// Any action the row offers is a [trailing] widget that always occupies space.
+class PhoneRow extends StatelessWidget {
+  const PhoneRow({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.chevron = false,
+    this.titleStyle,
+  });
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final bool chevron;
+  final TextStyle? titleStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    final twoLine = subtitle != null && subtitle!.isNotEmpty;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: BoxConstraints(
+          minHeight: twoLine ? PD.listRowTwoLine : PD.listRow,
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        titleStyle ??
+                        PT.body.copyWith(
+                          color: t.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  if (twoLine) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: PT.secondary.copyWith(color: t.textSecondary),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+            if (chevron) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.chevron_right, size: 20, color: t.textMuted),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A hairline between list rows. Never around them — the design system bans
+/// boxing every row, and a phone list of bordered cards is the tell.
+class PhoneDivider extends StatelessWidget {
+  const PhoneDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      Container(height: 1, color: AppTokens.of(context).line);
+}

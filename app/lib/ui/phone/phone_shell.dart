@@ -4,12 +4,20 @@ import '../../domain/notifications.dart';
 import '../../theme/tokens.dart';
 import 'capture_screen.dart';
 import 'people_screen.dart';
+import 'review_screen.dart';
 import 'today_screen.dart';
 
-enum PhoneTab { capture, today, people }
+enum PhoneTab { capture, today, people, review }
 
-/// Three tabs, bottom bar. No drawer, no hamburger, no nested tab stacks, and
+/// Four tabs, bottom bar. No drawer, no hamburger, no nested tab stacks, and
 /// nothing more than one push deep from its tab. Back is the system gesture.
+///
+/// ⚠ It was three until Money, Projects and Notes came to the phone. Six tabs
+/// at 390pt is 65pt each — truncated labels, and past the 3–5 the platform
+/// expects — so those three sit behind [PhoneReviewScreen], one push from the
+/// Review tab, and every edit inside them is a sheet rather than a further
+/// push. See the note on that class for why a visible hub is not the drawer
+/// the design spec bans.
 ///
 /// ⚠ CAPTURE IS THE DEFAULT TAB, NOT TODAY. The app's stated failure mode is
 /// that capture stops happening by week three; landing on the capture screen is
@@ -70,6 +78,7 @@ class PhoneShellState extends State<PhoneShell> {
           CaptureScreen(db: widget.db),
           PhoneTodayScreen(db: widget.db),
           PhonePeopleScreen(db: widget.db),
+          PhoneReviewScreen(db: widget.db),
         ],
       ),
       bottomNavigationBar: Container(
@@ -88,6 +97,7 @@ class PhoneShellState extends State<PhoneShell> {
                   (PhoneTab.capture, 'Capture', Icons.add_circle_outline),
                   (PhoneTab.today, 'Today', Icons.wb_sunny_outlined),
                   (PhoneTab.people, 'People', Icons.people_outline),
+                  (PhoneTab.review, 'Review', Icons.donut_small_outlined),
                 ])
                   Expanded(
                     child: GestureDetector(

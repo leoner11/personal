@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
+import '../../domain/money_totals.dart';
 import '../../theme/tokens.dart';
 import '../shell.dart';
 import '../widgets/pickers.dart';
@@ -22,20 +23,7 @@ class MoneyScreen extends StatelessWidget {
       builder: (context, snap) {
         final rows = snap.data ?? const <MoneyRow>[];
 
-        // Balance = sum of actuals, PER CURRENCY. Never converted.
-        final balances = <String, int>{};
-        final inExpected = <String, int>{};
-        final outExpected = <String, int>{};
-        for (final m in rows) {
-          final sign = m.direction == 'in' ? 1 : -1;
-          if (m.status == 'actual') {
-            balances[m.currency] =
-                (balances[m.currency] ?? 0) + sign * m.amountMinor;
-          } else {
-            final bucket = m.direction == 'in' ? inExpected : outExpected;
-            bucket[m.currency] = (bucket[m.currency] ?? 0) + m.amountMinor;
-          }
-        }
+        final totals = MoneyTotals.of(rows);
 
         return ScreenBody(
           title: 'Money',
@@ -52,7 +40,7 @@ class MoneyScreen extends StatelessWidget {
                       style: T.micro
                           .copyWith(color: t.textMuted, letterSpacing: 0.5)),
                   const SizedBox(height: 8),
-                  if (balances.isEmpty)
+                  if (totals.balances.isEmpty)
                     Text('—',
                         style: TextStyle(
                             fontSize: 28,
@@ -63,7 +51,7 @@ class MoneyScreen extends StatelessWidget {
                       spacing: 28,
                       runSpacing: 10,
                       children: [
-                        for (final e in balances.entries)
+                        for (final e in totals.balances.entries)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -90,7 +78,7 @@ class MoneyScreen extends StatelessWidget {
               Expanded(
                   child: _ExpectedColumn(
                       title: 'COMING IN',
-                      totals: inExpected,
+                      totals: totals.inExpected,
                       rows: rows
                           .where((m) =>
                               m.status == 'expected' && m.direction == 'in')
@@ -100,7 +88,7 @@ class MoneyScreen extends StatelessWidget {
               Expanded(
                   child: _ExpectedColumn(
                       title: 'COMING OUT',
-                      totals: outExpected,
+                      totals: totals.outExpected,
                       rows: rows
                           .where((m) =>
                               m.status == 'expected' && m.direction == 'out')
