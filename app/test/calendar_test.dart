@@ -3,7 +3,10 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_crm/data/database.dart';
 import 'package:personal_crm/domain/agenda.dart';
+import 'package:flutter/material.dart';
 import 'package:personal_crm/domain/ics.dart';
+import 'package:personal_crm/theme/tokens.dart';
+import 'package:personal_crm/ui/screens/calendar_screen.dart';
 
 void main() {
   late AppDatabase db;
@@ -168,6 +171,54 @@ void main() {
       expect(icsFor(meeting()), isNot(contains('LOCATION:')));
       expect(icsFor(meeting(location: 'their office')),
           contains('LOCATION:their office'));
+    });
+  });
+
+  group('the calendar screen renders', () {
+    // ⚠ The desktop rule: overflow only shows at the NARROW end. 396 is the
+    // tightest the detail pane can get — 960 minimum window, minus the 200
+    // sidebar, the 300 list and the padding.
+    Widget host(Widget child, double width) => MaterialApp(
+          theme: buildTheme(Brightness.light),
+          home: Scaffold(
+            body: Center(child: SizedBox(width: width, child: child)),
+          ),
+        );
+
+    testWidgets('a full day of every kind fits the tightest pane',
+        (tester) async {
+      await tester.runAsync(() async {
+        final pid = await person('Pak Arnold');
+        await db.addMeeting(MeetingsCompanion.insert(
+            title: 'Coffee and a look at the warehouse floor',
+            startsAt: DateTime.now().add(const Duration(days: 1, hours: 4)),
+            location: const Value('their office in Jakarta Selatan'),
+            personId: Value(pid)));
+        await db.setPing(pid, DateTime.now().add(const Duration(days: 1)),
+            note: 'follow up on the Odoo compatibility question');
+        await db.addMoney(MoneyCompanion.insert(
+            date: DateTime.now().add(const Duration(days: 1)),
+            direction: 'in',
+            amountMinor: 2500000,
+            label: 'Powerline milestone 3'));
+      });
+
+      await tester.pumpWidget(host(CalendarScreen(db: db), 396));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Calendar'), findsOneWidget);
+    });
+
+    testWidgets('an empty window says so rather than showing a blank page',
+        (tester) async {
+      await tester.pumpWidget(host(CalendarScreen(db: db), 900));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Nothing dated in this window.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }
