@@ -211,13 +211,54 @@ void main() {
       expect(find.text('Calendar'), findsOneWidget);
     });
 
-    testWidgets('an empty window says so rather than showing a blank page',
+    testWidgets('an empty day says so rather than showing a blank page',
         (tester) async {
       await tester.pumpWidget(host(CalendarScreen(db: db), 900));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Nothing dated in this window.'), findsOneWidget);
+      // ⚠ Most days ARE empty. That is the normal condition of a calendar,
+      // not something to apologise for.
+      expect(find.text('Nothing on this day.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('it looks like a calendar: weekday headers and 42 cells',
+        (tester) async {
+      await tester.pumpWidget(host(CalendarScreen(db: db), 900));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // ⚠ Weeks start Monday — the whole user base is CN/ID/MY.
+      expect(find.text('MON'), findsOneWidget);
+      expect(find.text('SUN'), findsOneWidget);
+
+      // ⚠ Six rows always, never five. A month needing six and one needing
+      // five would change the height of everything below it on every page.
+      final today = DateTime.now();
+      final first = DateTime(today.year, today.month);
+      final start = first.subtract(Duration(days: first.weekday - 1));
+      for (var i = 0; i < 42; i += 7) {
+        expect(find.text('${start.add(Duration(days: i)).day}'), findsWidgets);
+      }
+    });
+
+    testWidgets('picking a day changes the detail below the grid',
+        (tester) async {
+      // The grid answers "what shape is this month"; the list answers "what
+      // is actually on this day". Neither alone is the feature.
+      final when = DateTime(DateTime.now().year, DateTime.now().month, 15, 15, 0);
+      await tester.runAsync(() => db.addMeeting(
+          MeetingsCompanion.insert(title: 'Coffee with Pak Arnold', startsAt: when)));
+
+      await tester.pumpWidget(host(CalendarScreen(db: db), 900));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('15').first);
+      await tester.pump();
+
+      expect(find.text('Coffee with Pak Arnold'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

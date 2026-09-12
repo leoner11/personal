@@ -16,17 +16,29 @@ import 'widgets/primitives.dart';
 /// before rather than at the 09:00 the rest of the app uses.
 class MeetingSheet extends StatefulWidget {
   const MeetingSheet(
-      {super.key, required this.db, this.existing, this.presetPerson});
+      {super.key,
+      required this.db,
+      this.existing,
+      this.presetPerson,
+      this.presetDay});
   final AppDatabase db;
   final Meeting? existing;
   final Person? presetPerson;
 
+  /// The day the calendar was showing. ⚠ Without it, clicking 20 October and
+  /// pressing New meeting hands you tomorrow — and the mistake is easy to miss
+  /// because the field looks filled in.
+  final DateTime? presetDay;
+
   static Future<bool?> show(BuildContext c, AppDatabase db,
-          {Meeting? existing, Person? presetPerson}) =>
+          {Meeting? existing, Person? presetPerson, DateTime? presetDay}) =>
       showDialog<bool>(
         context: c,
-        builder: (_) =>
-            MeetingSheet(db: db, existing: existing, presetPerson: presetPerson),
+        builder: (_) => MeetingSheet(
+            db: db,
+            existing: existing,
+            presetPerson: presetPerson,
+            presetDay: presetDay),
       );
 
   @override
@@ -53,6 +65,8 @@ class _MeetingSheetState extends State<MeetingSheet> {
   DateTime _initialDay() {
     final e = widget.existing;
     if (e != null) return DateTime(e.startsAt.year, e.startsAt.month, e.startsAt.day);
+    final preset = widget.presetDay;
+    if (preset != null) return DateTime(preset.year, preset.month, preset.day);
     // ⚠ Tomorrow, not today. A meeting you are booking now is almost never in
     // the next few hours, and defaulting to today puts it in the past the
     // moment you pick a morning time.
