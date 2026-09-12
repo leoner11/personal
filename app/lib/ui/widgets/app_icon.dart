@@ -6,6 +6,7 @@ import '../../theme/tokens.dart';
 /// never per-icon, and no screen file imports LucideIcons directly.
 enum Ic {
   today(LucideIcons.sun),
+  calendar(LucideIcons.calendar),
   occasions(LucideIcons.gift),
   people(LucideIcons.users),
   projects(LucideIcons.folderOpen),

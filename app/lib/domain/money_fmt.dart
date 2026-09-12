@@ -35,6 +35,23 @@ String fmtMoney(int minor, String currency, {bool symbol = true}) {
 
 /// `8 Sep`, or `8 Sep 2025` if not this year. Never ISO, never 8/9/26 —
 /// day-month order is ambiguous between the ID and CN contexts.
+/// ⚠ This string is read by a human — on a lock screen months from now, on the
+/// Today card the notification opens onto, or on a calendar day. "1 people
+/// tagged" is a tell that nobody ever looked.
+///
+/// Shared by every caller on purpose: it was fixed in the notification body on
+/// 10 Sep and stayed broken on both Today screens for a day, which is what a
+/// duplicated string does.
+String taggedLabelFor(int n) => '$n ${n == 1 ? 'person' : 'people'} tagged';
+
+/// 24-hour clock. ⚠ Not am/pm: this app is used across CN, ID and MY, where
+/// 24-hour is the norm, and "3" alone is ambiguous in a notification body.
+String fmtClock(DateTime d) =>
+    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+/// Date plus time, for meetings — the only rows in this app that have one.
+String fmtDateTime(DateTime d) => '${fmtDate(d)} ${fmtClock(d)}';
+
 const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 String fmtDate(DateTime d) {

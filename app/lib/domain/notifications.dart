@@ -7,6 +7,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import '../data/database.dart';
+import '../domain/money_fmt.dart';
 import '../domain/occasions.dart';
 
 /// ⚠ KEY INSIGHT: every notification in this app has a date that is known at
@@ -33,6 +34,16 @@ int notificationId(String uuid, int slot) {
 /// hook, and an InheritedWidget for a single consumer is scope. `config.dart`
 /// already establishes that a global constant beats a settings screen here.
 Notifier? appNotifier;
+
+/// Rebuild the schedule after a write that changed a date.
+///
+/// ⚠ Notifications are DERIVED from the database, so a meeting booked now has
+/// no reminder until something reschedules. The lifecycle hook covers the
+/// phone, where you close the app constantly; on the Mac you might not quit
+/// for days, so every screen that writes a dated row calls this directly.
+Future<void> appNotifierReschedule() async {
+  await appNotifier?.rescheduleAll();
+}
 
 /// Bumped every time the user taps a notification while the app is already
 /// running. `PhoneShell` listens and switches to Today.
@@ -169,6 +180,21 @@ class Notifier {
           'Mark ${o.name} gift spend as actual?', 'Confirm what was spent');
     }
 
+    // Meetings. ⚠ These are the only notifications NOT pinned to 09:00.
+    // A 3pm coffee reminded at 9am is a reminder you have forgotten again by
+    // lunch, so it fires an hour before — see [_atExactly].
+    for (final m in await db.allMeetings()) {
+      n += await _atExactly(
+        notificationId(m.id, 4),
+        m.startsAt.subtract(const Duration(hours: 1)),
+        m.title,
+        [
+          fmtClock(m.startsAt),
+          if ((m.location ?? '').isNotEmpty) m.location!,
+        ].join(' · '),
+      );
+    }
+
     // Pings. The user chose this date personally, months earlier — one
     // notification, self-scheduled, not a nag stream.
     for (final p in people) {
@@ -180,11 +206,25 @@ class Notifier {
     return n;
   }
 
+  /// Fires at the exact moment given, rather than at 09:00 on that day.
+  Future<int> _atExactly(
+      int id, DateTime when, String title, String body) async {
+    if (!_ready) return 0;
+    final at = tz.TZDateTime.from(when, tz.local);
+    if (at.isBefore(tz.TZDateTime.now(tz.local))) return 0; // already past
+    return _schedule(id, at, title, body);
+  }
+
   Future<int> _at(int id, DateTime when, String title, String body) async {
     if (!_ready) return 0;
     final at = tz.TZDateTime.from(
         DateTime(when.year, when.month, when.day, 9), tz.local);
     if (at.isBefore(tz.TZDateTime.now(tz.local))) return 0; // already past
+    return _schedule(id, at, title, body);
+  }
+
+  Future<int> _schedule(
+      int id, tz.TZDateTime at, String title, String body) async {
     await _plugin.zonedSchedule(
       id: id,
       title: title,
@@ -224,14 +264,10 @@ class Notifier {
       (await _plugin.pendingNotificationRequests()).length;
 }
 
-/// ⚠ This string is read by a human — on a lock screen months from now, or on
-/// the Today card the notification opens onto. "1 people tagged" is a tell that
-/// nobody ever looked.
-///
-/// Public and shared by all three callers on purpose: it was fixed in the
-/// notification body on 10 Sep and stayed broken on both Today screens, which
-/// is what a duplicated string does.
-String taggedLabel(int n) => '$n ${n == 1 ? 'person' : 'people'} tagged';
+/// ⚠ Kept as an alias. The implementation moved to money_fmt.dart so the
+/// calendar could use it without importing the notifier, and the name stays
+/// here because three call sites already point at it.
+String taggedLabel(int n) => taggedLabelFor(n);
 
 /// Adds seeded occasions that are missing, without disturbing what is there.
 ///

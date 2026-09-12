@@ -60,6 +60,8 @@ class SyncEngine {
         'money': (await db.select(db.money).get()).map(_money).toList(),
         'notes': (await db.select(db.notes).get()).map(_note).toList(),
         'touches': (await db.select(db.touches).get()).map(_touch).toList(),
+        'meetings':
+            (await db.select(db.meetings).get()).map(_meeting).toList(),
       }
     };
     await http.post(Uri.parse('$baseUrl/sync'),
@@ -177,13 +179,34 @@ class SyncEngine {
           ));
     }
 
+    for (final row in (tables['meetings'] as List? ?? [])) {
+      await db.into(db.meetings).insertOnConflictUpdate(MeetingsCompanion(
+            id: Value(row['id'] as String),
+            personId: Value(_s(row['person_id'])),
+            engagementId: Value(_s(row['engagement_id'])),
+            title: Value(row['title'] ?? ''),
+            // ⚠ Meetings carry a TIME, unlike every other dated row here, so
+            // the full timestamp has to survive the round trip.
+            startsAt: Value(_d(row['starts_at']) ?? DateTime.now()),
+            durationMinutes: Value(row['duration_minutes'] ?? 60),
+            location: Value(_s(row['location'])),
+            notes: Value(_s(row['notes'])),
+            updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
+            deletedAt: Value(_d(row['deleted_at'])),
+          ));
+    }
+
     return data['server_time'] as String?;
   }
 
   static String? _s(dynamic v) =>
       (v == null || (v is String && v.isEmpty)) ? null : v as String;
+  /// ⚠ toLocal(), always. The server stores and returns UTC (Django has
+  /// USE_TZ on), so a value parsed straight through stays a UTC DateTime —
+  /// and drift then hands the UI 15:00 UTC, which is 23:00 in Haining. A
+  /// meeting silently moved eight hours on its first sync.
   static DateTime? _d(dynamic v) =>
-      v == null ? null : DateTime.tryParse(v as String);
+      v == null ? null : DateTime.tryParse(v as String)?.toLocal();
 
   Map<String, dynamic> _person(Person p) => {
         'id': p.id,
@@ -193,21 +216,21 @@ class SyncEngine {
         'wechat_id': p.wechatId ?? '',
         'preferred_channel': p.preferredChannel,
         'met_where': p.metWhere ?? '',
-        'met_when': p.metWhen?.toIso8601String(),
+        'met_when': p.metWhen?.toUtc().toIso8601String(),
         'notes': p.notes ?? '',
         'occasion_tags': p.occasionTags.join(','),
-        'ping_date': p.pingDate?.toIso8601String(),
+        'ping_date': p.pingDate?.toUtc().toIso8601String(),
         'ping_note': p.pingNote ?? '',
-        'deleted_at': p.deletedAt?.toIso8601String(),
+        'deleted_at': p.deletedAt?.toUtc().toIso8601String(),
       };
 
   Map<String, dynamic> _occasion(Occasion o) => {
         'id': o.id,
         'name': o.name,
-        'date': o.date.toIso8601String(),
+        'date': o.date.toUtc().toIso8601String(),
         'tag': o.tag,
         'country': o.country ?? '',
-        'deleted_at': o.deletedAt?.toIso8601String(),
+        'deleted_at': o.deletedAt?.toUtc().toIso8601String(),
       };
 
   Map<String, dynamic> _engagement(Engagement e) => {
@@ -219,22 +242,22 @@ class SyncEngine {
         'value_minor': e.valueMinor,
         'currency': e.currency ?? '',
         'notes': e.notes ?? '',
-        'deleted_at': e.deletedAt?.toIso8601String(),
+        'deleted_at': e.deletedAt?.toUtc().toIso8601String(),
       };
 
   Map<String, dynamic> _note(Note n) => {
         'id': n.id,
-        'date': n.date.toIso8601String(),
+        'date': n.date.toUtc().toIso8601String(),
         'text': n.body,
         'person_id': n.personId ?? '',
         'engagement_id': n.engagementId ?? '',
         'tag': n.tag ?? '',
-        'deleted_at': n.deletedAt?.toIso8601String(),
+        'deleted_at': n.deletedAt?.toUtc().toIso8601String(),
       };
 
   Map<String, dynamic> _money(MoneyRow m) => {
         'id': m.id,
-        'date': m.date.toIso8601String(),
+        'date': m.date.toUtc().toIso8601String(),
         'direction': m.direction,
         'amount_minor': m.amountMinor,
         'currency': m.currency,
@@ -243,14 +266,26 @@ class SyncEngine {
         'engagement_id': m.engagementId,
         'person_id': m.personId,
         'occasion_tag': m.occasionTag ?? '',
-        'deleted_at': m.deletedAt?.toIso8601String(),
+        'deleted_at': m.deletedAt?.toUtc().toIso8601String(),
+      };
+
+  Map<String, dynamic> _meeting(Meeting m) => {
+        'id': m.id,
+        'person_id': m.personId,
+        'engagement_id': m.engagementId,
+        'title': m.title,
+        'starts_at': m.startsAt.toUtc().toIso8601String(),
+        'duration_minutes': m.durationMinutes,
+        'location': m.location,
+        'notes': m.notes,
+        'deleted_at': m.deletedAt?.toUtc().toIso8601String(),
       };
 
   Map<String, dynamic> _touch(Touch t) => {
         'id': t.id,
         'person_id': t.personId,
-        'date': t.date.toIso8601String(),
+        'date': t.date.toUtc().toIso8601String(),
         'one_line': t.oneLine,
-        'deleted_at': t.deletedAt?.toIso8601String(),
+        'deleted_at': t.deletedAt?.toUtc().toIso8601String(),
       };
 }

@@ -177,13 +177,43 @@ class Touches extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [People, Occasions, Engagements, Money, Notes, Touches])
+/// A scheduled meeting. ⚠ The first table in this app with a TIME, not just a
+/// date — occasions are whole days and touches record what already happened.
+/// A meeting is a commitment at 3pm, so startsAt carries the clock and the
+/// reminder fires relative to it rather than at the 09:00 everything else uses.
+///
+/// ⚠ Why not reuse person.pingDate: that is ONE nullable column on the person
+/// row, so a person can hold exactly one future dated thing. Booking a meeting
+/// would silently overwrite their ping, and two meetings with the same person
+/// could not both exist.
+@DataClassName('Meeting')
+class Meetings extends Table {
+  TextColumn get id => text().clientDefault(newId)();
+
+  /// Nullable: a meeting can exist before you have decided who it is with,
+  /// and the same pattern as money and notes.
+  TextColumn get personId => text().nullable()();
+  TextColumn get engagementId => text().nullable()();
+  TextColumn get title => text()();
+  DateTimeColumn get startsAt => dateTime()();
+  IntColumn get durationMinutes => integer().withDefault(const Constant(60))();
+  TextColumn get location => text().nullable()();
+  TextColumn get notes => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(
+    tables: [People, Occasions, Engagements, Money, Notes, Touches, Meetings])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'personal_crm'));
   AppDatabase.forTesting(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -211,6 +241,11 @@ class AppDatabase extends _$AppDatabase {
                     .write(OccasionsCompanion(id: Value(want)));
               }
             }
+          }
+          // v5 adds meetings. ⚠ createTable only — nothing else is touched,
+          // because by now this database holds real contacts.
+          if (from < 5) {
+            await m.createTable(meetings);
           }
         },
       );
@@ -315,6 +350,37 @@ extension Queries on AppDatabase {
         ..where((p) => p.deletedAt.isNull() & p.pingDate.isNotNull())
         ..orderBy([(p) => OrderingTerm.asc(p.pingDate)]))
       .watch();
+
+  // ── Meetings ────────────────────────────────────────────────────────────
+  /// Everything ahead, soonest first — what the calendar and Today read.
+  Stream<List<Meeting>> watchMeetings() => (select(meetings)
+        ..where((m) => m.deletedAt.isNull())
+        ..orderBy([(m) => OrderingTerm.asc(m.startsAt)]))
+      .watch();
+
+  Stream<List<Meeting>> watchMeetingsForPerson(String personId) =>
+      (select(meetings)
+            ..where((m) => m.deletedAt.isNull() & m.personId.equals(personId))
+            ..orderBy([(m) => OrderingTerm.desc(m.startsAt)]))
+          .watch();
+
+  Future<List<Meeting>> allMeetings() => (select(meetings)
+        ..where((m) => m.deletedAt.isNull())
+        ..orderBy([(m) => OrderingTerm.asc(m.startsAt)]))
+      .get();
+
+  Future<int> addMeeting(MeetingsCompanion m) => into(meetings).insert(m);
+
+  Future<List<Touch>> allTouches() => (select(touches)
+        ..where((t) => t.deletedAt.isNull())
+        ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+      .get();
+
+  /// ⚠ Stamps updatedAt like every other write. Without it the row never
+  /// syncs — the server pulls on `updated_at > since` and never sees it.
+  Future<void> updateMeeting(String id, MeetingsCompanion patch) =>
+      (update(meetings)..where((m) => m.id.equals(id)))
+          .write(patch.copyWith(updatedAt: Value(DateTime.now())));
 
   Future<void> setPing(String id, DateTime? date, {String? note}) =>
       (update(people)..where((p) => p.id.equals(id))).write(PeopleCompanion(
@@ -468,7 +534,7 @@ class TimelineEntry {
   });
 
   final DateTime date;
-  /// touch | note | money
+  /// touch | note | money | meeting
   final String kind;
   final String text;
   /// 'in' | 'out' for money rows, null otherwise.

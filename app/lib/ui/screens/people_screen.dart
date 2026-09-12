@@ -481,8 +481,23 @@ class _TimelineState extends State<_Timeline> {
         stream: widget.db.watchNotesForPerson(widget.personId),
         builder: (context, noteSnap) => StreamBuilder<List<MoneyRow>>(
           stream: widget.db.watchMoneyForPerson(widget.personId),
-          builder: (context, moneySnap) {
+          builder: (context, moneySnap) => StreamBuilder<List<Meeting>>(
+            stream: widget.db.watchMeetingsForPerson(widget.personId),
+            builder: (context, meetingSnap) {
             final entries = <TimelineEntry>[
+              // ⚠ Meetings appear here whether they are past or future, which
+              // is the point of connecting them: "when did I last see him" and
+              // "when am I seeing him next" are one question asked in two
+              // directions, and this is the one place both are answered.
+              for (final m in meetingSnap.data ?? const <Meeting>[])
+                TimelineEntry(
+                    date: m.startsAt,
+                    kind: 'meeting',
+                    text: [
+                      m.title,
+                      fmtClock(m.startsAt),
+                      if ((m.location ?? '').isNotEmpty) m.location!,
+                    ].join(' · ')),
               for (final x in touches)
                 TimelineEntry(date: x.date, kind: 'touch', text: x.oneLine),
               for (final n in noteSnap.data ?? const <Note>[])
@@ -524,6 +539,10 @@ class _TimelineState extends State<_Timeline> {
                         decoration: BoxDecoration(
                             color: switch (e.kind) {
                               'note' => t.info.dot,
+                              // ⚠ Same tone the calendar gives a meeting. Two
+                              // views of one dataset must not teach different
+                              // colour languages.
+                              'meeting' => t.success.dot,
                               'money' => e.direction == 'in'
                                   ? t.success.dot
                                   : t.danger.dot,
@@ -533,7 +552,8 @@ class _TimelineState extends State<_Timeline> {
                       ),
                       const SizedBox(width: 8),
                       SizedBox(
-                        width: 40,
+                        // 'meeting' is the longest kind and did not fit in 40.
+                        width: 52,
                         child: Text(e.kind,
                             style: T.secondary.copyWith(color: t.textMuted)),
                       ),
@@ -548,6 +568,7 @@ class _TimelineState extends State<_Timeline> {
               ],
             );
           },
+          ),
         ),
       );
 

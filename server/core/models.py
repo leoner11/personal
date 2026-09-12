@@ -126,6 +126,23 @@ class Touch(SyncedModel):
     one_line = models.CharField(max_length=300, blank=True, default="")
 
 
+class Meeting(SyncedModel):
+    """⚠ The only synced row with a TIME rather than just a date. Occasions are
+    whole days and touches record what already happened; a meeting is a
+    commitment at 3pm, so starts_at carries the clock."""
+
+    person_id = models.CharField(max_length=36, blank=True, default="")
+    engagement_id = models.CharField(max_length=36, blank=True, default="")
+    title = models.CharField(max_length=200)
+    starts_at = models.DateTimeField()
+    duration_minutes = models.IntegerField(default=60)
+    location = models.CharField(max_length=200, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+
+    def __str__(self):
+        return f"{self.title} @ {self.starts_at:%Y-%m-%d %H:%M}"
+
+
 class AuthToken(models.Model):
     """A bearer token belonging to one account and one device.
 

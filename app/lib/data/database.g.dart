@@ -3510,6 +3510,621 @@ class TouchesCompanion extends UpdateCompanion<Touch> {
   }
 }
 
+class $MeetingsTable extends Meetings with TableInfo<$MeetingsTable, Meeting> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MeetingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newId,
+  );
+  static const VerificationMeta _personIdMeta = const VerificationMeta(
+    'personId',
+  );
+  @override
+  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
+    'person_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _engagementIdMeta = const VerificationMeta(
+    'engagementId',
+  );
+  @override
+  late final GeneratedColumn<String> engagementId = GeneratedColumn<String>(
+    'engagement_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startsAtMeta = const VerificationMeta(
+    'startsAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startsAt = GeneratedColumn<DateTime>(
+    'starts_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _durationMinutesMeta = const VerificationMeta(
+    'durationMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> durationMinutes = GeneratedColumn<int>(
+    'duration_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(60),
+  );
+  static const VerificationMeta _locationMeta = const VerificationMeta(
+    'location',
+  );
+  @override
+  late final GeneratedColumn<String> location = GeneratedColumn<String>(
+    'location',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    personId,
+    engagementId,
+    title,
+    startsAt,
+    durationMinutes,
+    location,
+    notes,
+    updatedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'meetings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Meeting> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('person_id')) {
+      context.handle(
+        _personIdMeta,
+        personId.isAcceptableOrUnknown(data['person_id']!, _personIdMeta),
+      );
+    }
+    if (data.containsKey('engagement_id')) {
+      context.handle(
+        _engagementIdMeta,
+        engagementId.isAcceptableOrUnknown(
+          data['engagement_id']!,
+          _engagementIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('starts_at')) {
+      context.handle(
+        _startsAtMeta,
+        startsAt.isAcceptableOrUnknown(data['starts_at']!, _startsAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startsAtMeta);
+    }
+    if (data.containsKey('duration_minutes')) {
+      context.handle(
+        _durationMinutesMeta,
+        durationMinutes.isAcceptableOrUnknown(
+          data['duration_minutes']!,
+          _durationMinutesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location')) {
+      context.handle(
+        _locationMeta,
+        location.isAcceptableOrUnknown(data['location']!, _locationMeta),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Meeting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Meeting(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      personId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}person_id'],
+      ),
+      engagementId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}engagement_id'],
+      ),
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      startsAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}starts_at'],
+      )!,
+      durationMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_minutes'],
+      )!,
+      location: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location'],
+      ),
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $MeetingsTable createAlias(String alias) {
+    return $MeetingsTable(attachedDatabase, alias);
+  }
+}
+
+class Meeting extends DataClass implements Insertable<Meeting> {
+  final String id;
+
+  /// Nullable: a meeting can exist before you have decided who it is with,
+  /// and the same pattern as money and notes.
+  final String? personId;
+  final String? engagementId;
+  final String title;
+  final DateTime startsAt;
+  final int durationMinutes;
+  final String? location;
+  final String? notes;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  const Meeting({
+    required this.id,
+    this.personId,
+    this.engagementId,
+    required this.title,
+    required this.startsAt,
+    required this.durationMinutes,
+    this.location,
+    this.notes,
+    required this.updatedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || personId != null) {
+      map['person_id'] = Variable<String>(personId);
+    }
+    if (!nullToAbsent || engagementId != null) {
+      map['engagement_id'] = Variable<String>(engagementId);
+    }
+    map['title'] = Variable<String>(title);
+    map['starts_at'] = Variable<DateTime>(startsAt);
+    map['duration_minutes'] = Variable<int>(durationMinutes);
+    if (!nullToAbsent || location != null) {
+      map['location'] = Variable<String>(location);
+    }
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  MeetingsCompanion toCompanion(bool nullToAbsent) {
+    return MeetingsCompanion(
+      id: Value(id),
+      personId: personId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(personId),
+      engagementId: engagementId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(engagementId),
+      title: Value(title),
+      startsAt: Value(startsAt),
+      durationMinutes: Value(durationMinutes),
+      location: location == null && nullToAbsent
+          ? const Value.absent()
+          : Value(location),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory Meeting.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Meeting(
+      id: serializer.fromJson<String>(json['id']),
+      personId: serializer.fromJson<String?>(json['personId']),
+      engagementId: serializer.fromJson<String?>(json['engagementId']),
+      title: serializer.fromJson<String>(json['title']),
+      startsAt: serializer.fromJson<DateTime>(json['startsAt']),
+      durationMinutes: serializer.fromJson<int>(json['durationMinutes']),
+      location: serializer.fromJson<String?>(json['location']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'personId': serializer.toJson<String?>(personId),
+      'engagementId': serializer.toJson<String?>(engagementId),
+      'title': serializer.toJson<String>(title),
+      'startsAt': serializer.toJson<DateTime>(startsAt),
+      'durationMinutes': serializer.toJson<int>(durationMinutes),
+      'location': serializer.toJson<String?>(location),
+      'notes': serializer.toJson<String?>(notes),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  Meeting copyWith({
+    String? id,
+    Value<String?> personId = const Value.absent(),
+    Value<String?> engagementId = const Value.absent(),
+    String? title,
+    DateTime? startsAt,
+    int? durationMinutes,
+    Value<String?> location = const Value.absent(),
+    Value<String?> notes = const Value.absent(),
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => Meeting(
+    id: id ?? this.id,
+    personId: personId.present ? personId.value : this.personId,
+    engagementId: engagementId.present ? engagementId.value : this.engagementId,
+    title: title ?? this.title,
+    startsAt: startsAt ?? this.startsAt,
+    durationMinutes: durationMinutes ?? this.durationMinutes,
+    location: location.present ? location.value : this.location,
+    notes: notes.present ? notes.value : this.notes,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  Meeting copyWithCompanion(MeetingsCompanion data) {
+    return Meeting(
+      id: data.id.present ? data.id.value : this.id,
+      personId: data.personId.present ? data.personId.value : this.personId,
+      engagementId: data.engagementId.present
+          ? data.engagementId.value
+          : this.engagementId,
+      title: data.title.present ? data.title.value : this.title,
+      startsAt: data.startsAt.present ? data.startsAt.value : this.startsAt,
+      durationMinutes: data.durationMinutes.present
+          ? data.durationMinutes.value
+          : this.durationMinutes,
+      location: data.location.present ? data.location.value : this.location,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Meeting(')
+          ..write('id: $id, ')
+          ..write('personId: $personId, ')
+          ..write('engagementId: $engagementId, ')
+          ..write('title: $title, ')
+          ..write('startsAt: $startsAt, ')
+          ..write('durationMinutes: $durationMinutes, ')
+          ..write('location: $location, ')
+          ..write('notes: $notes, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    personId,
+    engagementId,
+    title,
+    startsAt,
+    durationMinutes,
+    location,
+    notes,
+    updatedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Meeting &&
+          other.id == this.id &&
+          other.personId == this.personId &&
+          other.engagementId == this.engagementId &&
+          other.title == this.title &&
+          other.startsAt == this.startsAt &&
+          other.durationMinutes == this.durationMinutes &&
+          other.location == this.location &&
+          other.notes == this.notes &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class MeetingsCompanion extends UpdateCompanion<Meeting> {
+  final Value<String> id;
+  final Value<String?> personId;
+  final Value<String?> engagementId;
+  final Value<String> title;
+  final Value<DateTime> startsAt;
+  final Value<int> durationMinutes;
+  final Value<String?> location;
+  final Value<String?> notes;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const MeetingsCompanion({
+    this.id = const Value.absent(),
+    this.personId = const Value.absent(),
+    this.engagementId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.startsAt = const Value.absent(),
+    this.durationMinutes = const Value.absent(),
+    this.location = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MeetingsCompanion.insert({
+    this.id = const Value.absent(),
+    this.personId = const Value.absent(),
+    this.engagementId = const Value.absent(),
+    required String title,
+    required DateTime startsAt,
+    this.durationMinutes = const Value.absent(),
+    this.location = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : title = Value(title),
+       startsAt = Value(startsAt);
+  static Insertable<Meeting> custom({
+    Expression<String>? id,
+    Expression<String>? personId,
+    Expression<String>? engagementId,
+    Expression<String>? title,
+    Expression<DateTime>? startsAt,
+    Expression<int>? durationMinutes,
+    Expression<String>? location,
+    Expression<String>? notes,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (personId != null) 'person_id': personId,
+      if (engagementId != null) 'engagement_id': engagementId,
+      if (title != null) 'title': title,
+      if (startsAt != null) 'starts_at': startsAt,
+      if (durationMinutes != null) 'duration_minutes': durationMinutes,
+      if (location != null) 'location': location,
+      if (notes != null) 'notes': notes,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MeetingsCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? personId,
+    Value<String?>? engagementId,
+    Value<String>? title,
+    Value<DateTime>? startsAt,
+    Value<int>? durationMinutes,
+    Value<String?>? location,
+    Value<String?>? notes,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return MeetingsCompanion(
+      id: id ?? this.id,
+      personId: personId ?? this.personId,
+      engagementId: engagementId ?? this.engagementId,
+      title: title ?? this.title,
+      startsAt: startsAt ?? this.startsAt,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      location: location ?? this.location,
+      notes: notes ?? this.notes,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (personId.present) {
+      map['person_id'] = Variable<String>(personId.value);
+    }
+    if (engagementId.present) {
+      map['engagement_id'] = Variable<String>(engagementId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (startsAt.present) {
+      map['starts_at'] = Variable<DateTime>(startsAt.value);
+    }
+    if (durationMinutes.present) {
+      map['duration_minutes'] = Variable<int>(durationMinutes.value);
+    }
+    if (location.present) {
+      map['location'] = Variable<String>(location.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MeetingsCompanion(')
+          ..write('id: $id, ')
+          ..write('personId: $personId, ')
+          ..write('engagementId: $engagementId, ')
+          ..write('title: $title, ')
+          ..write('startsAt: $startsAt, ')
+          ..write('durationMinutes: $durationMinutes, ')
+          ..write('location: $location, ')
+          ..write('notes: $notes, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3519,6 +4134,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $MoneyTable money = $MoneyTable(this);
   late final $NotesTable notes = $NotesTable(this);
   late final $TouchesTable touches = $TouchesTable(this);
+  late final $MeetingsTable meetings = $MeetingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3530,6 +4146,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     money,
     notes,
     touches,
+    meetings,
   ];
 }
 
@@ -5232,6 +5849,299 @@ typedef $$TouchesTableProcessedTableManager =
       Touch,
       PrefetchHooks Function()
     >;
+typedef $$MeetingsTableCreateCompanionBuilder =
+    MeetingsCompanion Function({
+      Value<String> id,
+      Value<String?> personId,
+      Value<String?> engagementId,
+      required String title,
+      required DateTime startsAt,
+      Value<int> durationMinutes,
+      Value<String?> location,
+      Value<String?> notes,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$MeetingsTableUpdateCompanionBuilder =
+    MeetingsCompanion Function({
+      Value<String> id,
+      Value<String?> personId,
+      Value<String?> engagementId,
+      Value<String> title,
+      Value<DateTime> startsAt,
+      Value<int> durationMinutes,
+      Value<String?> location,
+      Value<String?> notes,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$MeetingsTableFilterComposer
+    extends Composer<_$AppDatabase, $MeetingsTable> {
+  $$MeetingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get personId => $composableBuilder(
+    column: $table.personId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get engagementId => $composableBuilder(
+    column: $table.engagementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startsAt => $composableBuilder(
+    column: $table.startsAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MeetingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $MeetingsTable> {
+  $$MeetingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get personId => $composableBuilder(
+    column: $table.personId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get engagementId => $composableBuilder(
+    column: $table.engagementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startsAt => $composableBuilder(
+    column: $table.startsAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MeetingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MeetingsTable> {
+  $$MeetingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get personId =>
+      $composableBuilder(column: $table.personId, builder: (column) => column);
+
+  GeneratedColumn<String> get engagementId => $composableBuilder(
+    column: $table.engagementId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startsAt =>
+      $composableBuilder(column: $table.startsAt, builder: (column) => column);
+
+  GeneratedColumn<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get location =>
+      $composableBuilder(column: $table.location, builder: (column) => column);
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$MeetingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MeetingsTable,
+          Meeting,
+          $$MeetingsTableFilterComposer,
+          $$MeetingsTableOrderingComposer,
+          $$MeetingsTableAnnotationComposer,
+          $$MeetingsTableCreateCompanionBuilder,
+          $$MeetingsTableUpdateCompanionBuilder,
+          (Meeting, BaseReferences<_$AppDatabase, $MeetingsTable, Meeting>),
+          Meeting,
+          PrefetchHooks Function()
+        > {
+  $$MeetingsTableTableManager(_$AppDatabase db, $MeetingsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MeetingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MeetingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MeetingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> personId = const Value.absent(),
+                Value<String?> engagementId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<DateTime> startsAt = const Value.absent(),
+                Value<int> durationMinutes = const Value.absent(),
+                Value<String?> location = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MeetingsCompanion(
+                id: id,
+                personId: personId,
+                engagementId: engagementId,
+                title: title,
+                startsAt: startsAt,
+                durationMinutes: durationMinutes,
+                location: location,
+                notes: notes,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> personId = const Value.absent(),
+                Value<String?> engagementId = const Value.absent(),
+                required String title,
+                required DateTime startsAt,
+                Value<int> durationMinutes = const Value.absent(),
+                Value<String?> location = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MeetingsCompanion.insert(
+                id: id,
+                personId: personId,
+                engagementId: engagementId,
+                title: title,
+                startsAt: startsAt,
+                durationMinutes: durationMinutes,
+                location: location,
+                notes: notes,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MeetingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MeetingsTable,
+      Meeting,
+      $$MeetingsTableFilterComposer,
+      $$MeetingsTableOrderingComposer,
+      $$MeetingsTableAnnotationComposer,
+      $$MeetingsTableCreateCompanionBuilder,
+      $$MeetingsTableUpdateCompanionBuilder,
+      (Meeting, BaseReferences<_$AppDatabase, $MeetingsTable, Meeting>),
+      Meeting,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5248,4 +6158,6 @@ class $AppDatabaseManager {
       $$NotesTableTableManager(_db, _db.notes);
   $$TouchesTableTableManager get touches =>
       $$TouchesTableTableManager(_db, _db.touches);
+  $$MeetingsTableTableManager get meetings =>
+      $$MeetingsTableTableManager(_db, _db.meetings);
 }

@@ -7,7 +7,7 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 import json
 
-from .models import Person, Occasion, Engagement, Money, Note, Touch
+from .models import Person, Occasion, Engagement, Money, Note, Touch, Meeting
 
 TABLES = {
     "people": Person,
@@ -16,6 +16,7 @@ TABLES = {
     "money": Money,
     "notes": Note,
     "touches": Touch,
+    "meetings": Meeting,
 }
 
 # Fields the client owns. updated_at is deliberately absent — the server stamps it.
@@ -30,9 +31,11 @@ FIELDS = {
               "engagement_id", "person_id", "occasion_tag", "deleted_at"],
     "notes": ["date", "text", "person_id", "engagement_id", "tag", "deleted_at"],
     "touches": ["person_id", "date", "one_line", "deleted_at"],
+    "meetings": ["person_id", "engagement_id", "title", "starts_at",
+                 "duration_minutes", "location", "notes", "deleted_at"],
 }
 
-DATETIME_FIELDS = {"met_when", "ping_date", "date", "deleted_at"}
+DATETIME_FIELDS = {"met_when", "ping_date", "date", "starts_at", "deleted_at"}
 
 
 def _serialize(obj, table):
