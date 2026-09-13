@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:ui' show Color;
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show ValueNotifier;
@@ -86,7 +87,13 @@ class Notifier {
           requestBadgePermission: false,
           requestSoundPermission: false,
         ),
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // ⚠ A DEDICATED MONOCHROME ICON, not the launcher icon. Android
+        // paints the notification small icon from the ALPHA CHANNEL alone —
+        // every opaque pixel becomes solid white — so a full-colour launcher
+        // icon arrives in the status bar as a featureless white blob. This
+        // one keeps the ink and drops the card to transparent, so the mark
+        // still reads as a mark.
+        android: AndroidInitializationSettings('@drawable/ic_notification'),
       ),
     );
     _ready = await _checkReady();
@@ -242,6 +249,10 @@ class Notifier {
           channelDescription: 'Festivals and follow-up pings that are due.',
           importance: Importance.high,
           priority: Priority.high,
+          // Tints the small icon and the app name in the shade. The same
+          // green as the app's accent, so the notification is recognisably
+          // from this app before the text is read.
+          color: Color(0xFF2F6B4F),
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
