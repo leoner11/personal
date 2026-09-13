@@ -15,6 +15,12 @@ import 'phone_primitives.dart';
 /// screen is quiet because nothing needed doing — not because it failed. Do
 /// not fill it with streaks, suggestions or "people you haven't contacted".
 /// Engagement is not a goal for a tool with one user.
+/// Whether a timestamp falls on today's date — the distinction Today is about.
+bool _sameDay(DateTime d) {
+  final n = DateTime.now();
+  return d.year == n.year && d.month == n.month && d.day == n.day;
+}
+
 class PhoneTodayScreen extends StatefulWidget {
   const PhoneTodayScreen({super.key, required this.db});
   final AppDatabase db;
@@ -70,6 +76,49 @@ class _PhoneTodayScreenState extends State<PhoneTodayScreen> {
                       ],
                     ),
                   ),
+                ]),
+
+              // ⚠ FIRST, above occasions. A meeting at 15:00 is the most
+              // time-critical thing this app knows; a festival in two weeks is
+              // the least. Ordering by urgency is the point of a prompt feed.
+              if (d.meetings.isNotEmpty)
+                PhoneSection('Meetings', [
+                  for (final m in d.meetings)
+                    PhoneCard(
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                PhoneTag(
+                                    tone: t.success,
+                                    label: _sameDay(m.startsAt)
+                                        ? fmtClock(m.startsAt)
+                                        : 'tmr ${fmtClock(m.startsAt)}'),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(m.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: PT.body.copyWith(
+                                          color: t.textPrimary,
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                              ]),
+                              if ((m.location ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(m.location!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: PT.secondary
+                                        .copyWith(color: t.textSecondary)),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ]),
+                    ),
                 ]),
 
               if (d.occasions.isNotEmpty)

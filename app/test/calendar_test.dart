@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_crm/data/database.dart';
 import 'package:personal_crm/domain/agenda.dart';
+import 'package:personal_crm/domain/today.dart';
 import 'package:flutter/material.dart';
 import 'package:personal_crm/domain/ics.dart';
 import 'package:personal_crm/theme/tokens.dart';
@@ -260,6 +261,61 @@ void main() {
 
       expect(find.text('Coffee with Pak Arnold'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('Today includes meetings', () {
+    // ⚠ The gap this closes: meetings were added to the calendar and the
+    // person timeline but not to Today, so the one screen that answers "what
+    // needs me now" was silent about the most time-critical row in the app.
+    DateTime at(int addDays, int hour) {
+      final n = DateTime.now();
+      return DateTime(n.year, n.month, n.day, hour).add(Duration(days: addDays));
+    }
+
+    test("today's meeting appears", () async {
+      await db.addMeeting(
+          MeetingsCompanion.insert(title: 'Coffee', startsAt: at(0, 15)));
+      final d = await loadToday(db);
+      expect(d.meetings.map((m) => m.title), ['Coffee']);
+      expect(d.count, greaterThan(0));
+    });
+
+    test("tomorrow's meeting appears, the day after does not", () async {
+      // ⚠ A meeting needs about a day of lead. Occasions get fourteen because
+      // gifts do. Anything further out is the calendar's job — widening this
+      // turns a prompt feed into a second calendar you have to scroll.
+      await db.addMeeting(
+          MeetingsCompanion.insert(title: 'Tomorrow', startsAt: at(1, 10)));
+      await db.addMeeting(
+          MeetingsCompanion.insert(title: 'Later', startsAt: at(2, 10)));
+      final d = await loadToday(db);
+      expect(d.meetings.map((m) => m.title), ['Tomorrow']);
+    });
+
+    test('a meeting earlier today does NOT vanish once it has passed',
+        () async {
+      // ⚠ The window starts at midnight, not at now. A 10:00 meeting
+      // disappearing from Today at 10:01 would be the app forgetting what you
+      // are in the middle of.
+      await db.addMeeting(
+          MeetingsCompanion.insert(title: 'Early', startsAt: at(0, 0)));
+      final d = await loadToday(db);
+      expect(d.meetings.map((m) => m.title), ['Early']);
+    });
+
+    test('yesterday is gone', () async {
+      await db.addMeeting(
+          MeetingsCompanion.insert(title: 'Yesterday', startsAt: at(-1, 15)));
+      expect((await loadToday(db)).meetings, isEmpty);
+    });
+
+    test('a deleted meeting is not counted', () async {
+      await db.addMeeting(MeetingsCompanion.insert(
+          id: const Value('m1'), title: 'Cancelled', startsAt: at(0, 15)));
+      await db.updateMeeting(
+          'm1', MeetingsCompanion(deletedAt: Value(DateTime.now())));
+      expect((await loadToday(db)).meetings, isEmpty);
     });
   });
 }

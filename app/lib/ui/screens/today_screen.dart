@@ -11,6 +11,13 @@ import '../widgets/primitives.dart';
 /// Do not add streaks, suggestions, "people you haven't contacted", or any
 /// filler to make this screen look busy. Engagement is not a goal for a tool
 /// with one user — the notification is the delivery mechanism, not this screen.
+/// Whether a timestamp falls on today's date. Used to say "15:00" rather than
+/// "tomorrow 15:00" — the distinction Today is entirely about.
+bool _sameDay(DateTime d) {
+  final n = DateTime.now();
+  return d.year == n.year && d.month == n.month && d.day == n.day;
+}
+
 class TodayScreen extends StatefulWidget {
   const TodayScreen(
       {super.key, required this.db, required this.onCount, required this.onGo});
@@ -79,6 +86,56 @@ class _TodayScreenState extends State<TodayScreen> {
                       onPressed: () => onGo(Section.occasions)),
                 ]),
               )
+            ]));
+          }
+
+          // ⚠ FIRST, above occasions. A meeting at 15:00 is the most
+          // time-critical thing this app can know about; a festival in two
+          // weeks is the least. Ordering by urgency is the whole point of a
+          // prompt feed.
+          if (d.meetings.isNotEmpty) {
+            blocks.add(_Section('Meetings', [
+              for (final m in d.meetings)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Panel(
+                    child: Row(children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              StatusTag(
+                                  tone: t.success,
+                                  label: _sameDay(m.startsAt)
+                                      ? fmtClock(m.startsAt)
+                                      : 'tomorrow ${fmtClock(m.startsAt)}'),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(m.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: T.body.copyWith(
+                                        color: t.textPrimary,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                            ]),
+                            if ((m.location ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(m.location!,
+                                  style: T.secondary
+                                      .copyWith(color: t.textSecondary)),
+                            ],
+                          ],
+                        ),
+                      ),
+                      Btn('Open',
+                          size: BtnSize.sm,
+                          variant: BtnVariant.ghost,
+                          onPressed: () => onGo(Section.calendar)),
+                    ]),
+                  ),
+                ),
             ]));
           }
 

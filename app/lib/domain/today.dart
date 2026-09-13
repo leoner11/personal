@@ -5,12 +5,19 @@ import 'money_fmt.dart';
 /// the phone must not drift from the Mac about what "today" means.
 class TodayData {
   TodayData({
+    required this.meetings,
     required this.occasions,
     required this.pings,
     required this.settle,
     required this.taggedCounts,
     required this.runwayWarning,
   });
+
+  /// ⚠ Today and tomorrow only. Occasions get a 14-day window because gifts
+  /// need lead time; a meeting needs about a day. Anything further out is the
+  /// calendar's job, and putting it here would turn a prompt feed into a
+  /// second calendar you have to scroll.
+  final List<Meeting> meetings;
   final List<Occasion> occasions;
   final List<Person> pings;
   final List<MoneyRow> settle;
@@ -18,6 +25,7 @@ class TodayData {
   final String? runwayWarning;
 
   int get count =>
+      meetings.length +
       occasions.length +
       pings.length +
       settle.length +
@@ -35,6 +43,15 @@ Future<TodayData> loadToday(AppDatabase db) async {
           p.pingDate != null &&
           p.pingDate!.isBefore(now.add(const Duration(days: 1))))
       .toList();
+  // ⚠ From the START of today, not from now: a 10:00 meeting must not vanish
+  // off Today at 10:01. It happened today, and Today is what today holds.
+  final startOfToday = DateTime(now.year, now.month, now.day);
+  final endOfTomorrow = startOfToday.add(const Duration(days: 2));
+  final meetings = (await db.allMeetings())
+      .where((m) =>
+          !m.startsAt.isBefore(startOfToday) && m.startsAt.isBefore(endOfTomorrow))
+      .toList();
+
   final moneyRows = await db.allMoney();
   final settle = moneyRows
       .where((m) =>
@@ -59,6 +76,7 @@ Future<TodayData> loadToday(AppDatabase db) async {
   }
 
   return TodayData(
+    meetings: meetings,
     occasions: occ,
     pings: pings,
     settle: settle,
