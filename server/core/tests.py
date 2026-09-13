@@ -271,3 +271,53 @@ class TenantIsolationTests(TestCase):
         self.push(self.a, [{"id": "row-1", "name": "Pak Andi"}])
         User.objects.get(username="leonard").delete()
         self.assertEqual(Person.objects.filter(client_id="row-1").count(), 0)
+
+
+@override_settings(REGISTRATION_SECRET="")
+class TaskSyncTests(TestCase):
+    """Tasks ride the same sync as every other table. ⚠ due_date, done_at and
+    created_at are datetimes, so each must be parsed on push — a raw string
+    stored in a DateTimeField is the class of bug that moved a meeting eight
+    hours."""
+
+    def setUp(self):
+        cache.clear()
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            content_type="application/json",
+        )
+        self.auth = {"authorization": f"Bearer {body(r)['token']}"}
+
+    def test_a_task_round_trips_with_its_dates(self):
+        self.client.post(
+            "/sync",
+            data=json.dumps({"tables": {"tasks": [{
+                "id": "t1", "title": "Send the quotation", "notes": "",
+                "created_at": "2026-09-13T02:00:00Z",
+                "due_date": "2026-09-17T16:00:00Z",
+                "done_at": None, "person_id": "p1", "engagement_id": "",
+            }]}}),
+            content_type="application/json",
+            headers=self.auth,
+        )
+        rows = json.loads(
+            self.client.get("/sync", headers=self.auth).content)["tables"]["tasks"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["title"], "Send the quotation")
+        self.assertEqual(rows[0]["due_date"], "2026-09-17T16:00:00+00:00")
+        self.assertIsNone(rows[0]["done_at"])
+        self.assertEqual(rows[0]["person_id"], "p1")
+
+    def test_ticking_off_on_one_device_reaches_the_other(self):
+        row = {"id": "t1", "title": "Call Lucy", "created_at": "2026-09-13T02:00:00Z"}
+        for done in (None, "2026-09-14T03:00:00Z"):
+            self.client.post(
+                "/sync",
+                data=json.dumps({"tables": {"tasks": [dict(row, done_at=done)]}}),
+                content_type="application/json",
+                headers=self.auth,
+            )
+        rows = json.loads(
+            self.client.get("/sync", headers=self.auth).content)["tables"]["tasks"]
+        self.assertEqual([r["done_at"] for r in rows], ["2026-09-14T03:00:00+00:00"])

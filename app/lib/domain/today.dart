@@ -6,6 +6,7 @@ import 'money_fmt.dart';
 class TodayData {
   TodayData({
     required this.meetings,
+    required this.tasks,
     required this.occasions,
     required this.pings,
     required this.settle,
@@ -18,6 +19,11 @@ class TodayData {
   /// calendar's job, and putting it here would turn a prompt feed into a
   /// second calendar you have to scroll.
   final List<Meeting> meetings;
+
+  /// ⚠ Due today or OVERDUE, never tomorrow. An overdue task is exactly the
+  /// thing a prompt feed exists to keep in front of you; it leaves when it is
+  /// ticked off or re-dated, not when its day passes.
+  final List<Task> tasks;
   final List<Occasion> occasions;
   final List<Person> pings;
   final List<MoneyRow> settle;
@@ -26,6 +32,7 @@ class TodayData {
 
   int get count =>
       meetings.length +
+      tasks.length +
       occasions.length +
       pings.length +
       settle.length +
@@ -52,6 +59,14 @@ Future<TodayData> loadToday(AppDatabase db) async {
           !m.startsAt.isBefore(startOfToday) && m.startsAt.isBefore(endOfTomorrow))
       .toList();
 
+  final tasks = (await db.allTasks())
+      .where((t) =>
+          t.doneAt == null &&
+          t.dueDate != null &&
+          t.dueDate!.isBefore(startOfToday.add(const Duration(days: 1))))
+      .toList()
+    ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+
   final moneyRows = await db.allMoney();
   final settle = moneyRows
       .where((m) =>
@@ -77,6 +92,7 @@ Future<TodayData> loadToday(AppDatabase db) async {
 
   return TodayData(
     meetings: meetings,
+    tasks: tasks,
     occasions: occ,
     pings: pings,
     settle: settle,

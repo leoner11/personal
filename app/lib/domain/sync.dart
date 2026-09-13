@@ -62,6 +62,7 @@ class SyncEngine {
         'touches': (await db.select(db.touches).get()).map(_touch).toList(),
         'meetings':
             (await db.select(db.meetings).get()).map(_meeting).toList(),
+        'tasks': (await db.select(db.tasks).get()).map(_task).toList(),
       }
     };
     await http.post(Uri.parse('$baseUrl/sync'),
@@ -196,6 +197,21 @@ class SyncEngine {
           ));
     }
 
+    for (final row in (tables['tasks'] as List? ?? [])) {
+      await db.into(db.tasks).insertOnConflictUpdate(TasksCompanion(
+            id: Value(row['id'] as String),
+            title: Value(row['title'] ?? ''),
+            notes: Value(_s(row['notes'])),
+            createdAt: Value(_d(row['created_at']) ?? DateTime.now()),
+            dueDate: Value(_d(row['due_date'])),
+            doneAt: Value(_d(row['done_at'])),
+            personId: Value(_s(row['person_id'])),
+            engagementId: Value(_s(row['engagement_id'])),
+            updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
+            deletedAt: Value(_d(row['deleted_at'])),
+          ));
+    }
+
     return data['server_time'] as String?;
   }
 
@@ -279,6 +295,18 @@ class SyncEngine {
         'location': m.location,
         'notes': m.notes,
         'deleted_at': m.deletedAt?.toUtc().toIso8601String(),
+      };
+
+  Map<String, dynamic> _task(Task t) => {
+        'id': t.id,
+        'title': t.title,
+        'notes': t.notes ?? '',
+        'created_at': t.createdAt.toUtc().toIso8601String(),
+        'due_date': t.dueDate?.toUtc().toIso8601String(),
+        'done_at': t.doneAt?.toUtc().toIso8601String(),
+        'person_id': t.personId ?? '',
+        'engagement_id': t.engagementId ?? '',
+        'deleted_at': t.deletedAt?.toUtc().toIso8601String(),
       };
 
   Map<String, dynamic> _touch(Touch t) => {

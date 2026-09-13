@@ -143,6 +143,24 @@ class Meeting(SyncedModel):
         return f"{self.title} @ {self.starts_at:%Y-%m-%d %H:%M}"
 
 
+class Task(SyncedModel):
+    """A to-do. ⚠ due_date is a DAY, not a time, and done_at is a timestamp
+    rather than a bool — when it was ticked off is worth keeping."""
+
+    title = models.CharField(max_length=300)
+    notes = models.TextField(blank=True, default="")
+    # Client-set, unlike updated_at: it orders an undated checklist, and the
+    # moment the row was written on the device is the moment that matters.
+    created_at = models.DateTimeField(null=True, blank=True)
+    due_date = models.DateTimeField(null=True, blank=True)
+    done_at = models.DateTimeField(null=True, blank=True)
+    person_id = models.CharField(max_length=36, blank=True, default="")
+    engagement_id = models.CharField(max_length=36, blank=True, default="")
+
+    def __str__(self):
+        return self.title
+
+
 class AuthToken(models.Model):
     """A bearer token belonging to one account and one device.
 

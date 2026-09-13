@@ -7,6 +7,7 @@ import '../../theme/tokens.dart';
 enum Ic {
   today(LucideIcons.sun),
   calendar(LucideIcons.calendar),
+  tasks(LucideIcons.checkSquare),
   occasions(LucideIcons.gift),
   people(LucideIcons.users),
   projects(LucideIcons.folderOpen),

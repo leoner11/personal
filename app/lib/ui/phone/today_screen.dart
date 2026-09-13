@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/notifications.dart';
+import '../../domain/tasks.dart';
 import '../../domain/today.dart';
 import '../../theme/tokens.dart';
 import 'occasion_run_screen.dart';
@@ -118,6 +119,44 @@ class _PhoneTodayScreenState extends State<PhoneTodayScreen> {
                           ),
                         ),
                       ]),
+                    ),
+                ]),
+
+              // ⚠ Rendered here too, not only on the Mac. TodayData counts
+              // tasks, so leaving them out would make a day with only a task
+              // due show a blank list instead of the empty state.
+              if (d.tasks.isNotEmpty)
+                PhoneSection('Tasks', [
+                  for (final task in d.tasks)
+                    PhoneCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            PhoneTag(
+                                tone: groupOf(task, DateTime.now()) ==
+                                        TaskGroup.overdue
+                                    ? t.danger
+                                    : t.attention,
+                                label: dueLabel(task.dueDate!, DateTime.now())),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(task.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: PT.body.copyWith(
+                                      color: t.textPrimary,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                          ]),
+                          const SizedBox(height: 10),
+                          PhoneBtn('Done', onPressed: () async {
+                            await widget.db.setTaskDone(task.id, true);
+                            await appNotifierReschedule();
+                            _refresh();
+                          }),
+                        ],
+                      ),
                     ),
                 ]),
 

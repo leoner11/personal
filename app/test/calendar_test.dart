@@ -331,10 +331,11 @@ void main() {
 
     test('every slot in use is distinct for one row', () {
       // 0 ping · 1 occasion T-14 · 2 occasion T-3 · 3 occasion T+1
-      // 4 meeting T-1h · 5 meeting T-1day
+      // 4 meeting T-1h · 5 meeting T-1day · 6 task due
       const id = 'row-1';
-      final used = [0, 1, 2, 3, 4, 5].map((s) => notificationId(id, s)).toSet();
-      expect(used.length, 6);
+      final used =
+          [0, 1, 2, 3, 4, 5, 6].map((s) => notificationId(id, s)).toSet();
+      expect(used.length, 7);
     });
 
     test('the same slot on different rows does not collide', () {

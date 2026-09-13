@@ -214,6 +214,14 @@ class Notifier {
       );
     }
 
+    // Tasks. One reminder, 09:00 on the day it is due. ⚠ Done tasks are
+    // skipped here, so ticking one off must reschedule or it still fires.
+    for (final t in await db.allTasks()) {
+      if (t.dueDate == null || t.doneAt != null) continue;
+      n += await _at(notificationId(t.id, 6), t.dueDate!, 'Due today: ${t.title}',
+          (t.notes ?? '').isNotEmpty ? t.notes! : 'Tick it off in Personal');
+    }
+
     // Pings. The user chose this date personally, months earlier — one
     // notification, self-scheduled, not a nag stream.
     for (final p in people) {

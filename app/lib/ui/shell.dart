@@ -15,6 +15,7 @@ import 'screens/notes_screen.dart';
 import 'screens/occasions_screen.dart';
 import 'screens/people_screen.dart';
 import 'screens/projects_screen.dart';
+import 'screens/tasks_screen.dart';
 import 'screens/today_screen.dart';
 import 'widgets/app_icon.dart';
 import 'widgets/primitives.dart';
@@ -22,6 +23,7 @@ import 'widgets/primitives.dart';
 enum Section {
   today('Today', Ic.today),
   calendar('Calendar', Ic.calendar),
+  tasks('Tasks', Ic.tasks),
   occasions('Occasions', Ic.occasions),
   people('People', Ic.people),
   projects('Projects', Ic.projects),
@@ -85,6 +87,7 @@ class _ShellState extends State<Shell> {
                       onGo: _go,
                     ),
                   Section.calendar => CalendarScreen(db: widget.db),
+                  Section.tasks => TasksScreen(db: widget.db),
                   Section.occasions => OccasionsScreen(db: widget.db),
                   Section.people => PeopleScreen(db: widget.db),
                   Section.projects => ProjectsScreen(db: widget.db),

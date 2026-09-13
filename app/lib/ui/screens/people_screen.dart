@@ -9,6 +9,7 @@ import '../../theme/tokens.dart';
 import '../add_person_sheet.dart';
 import '../shell.dart';
 import 'projects_screen.dart';
+import 'tasks_screen.dart';
 import '../widgets/primitives.dart';
 
 /// Grouped by last touch. Detail is header + tags + ping + timeline —
@@ -268,6 +269,13 @@ class _PeopleScreenState extends State<PeopleScreen> {
         ),
         const SizedBox(height: 12),
         _LinkedProjects(db: widget.db, person: p),
+        const SizedBox(height: 12),
+        Panel(
+          child: LinkedTasks(
+              db: widget.db,
+              stream: widget.db.watchTasksForPerson(p.id),
+              presetPerson: p),
+        ),
         const SizedBox(height: 12),
         _Timeline(db: widget.db, personId: p.id, onLog: _refreshTouches),
       ]),

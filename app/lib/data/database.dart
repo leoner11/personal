@@ -206,14 +206,47 @@ class Meetings extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(
-    tables: [People, Occasions, Engagements, Money, Notes, Touches, Meetings])
+/// A to-do. One line you tick off, optionally due on a day and optionally
+/// attached to a person or a project.
+///
+/// ⚠ A DAY, not a time. A meeting is 15:00; "send Pak Arnold the quotation" is
+/// due Thursday, and inventing a clock for it would make Today say it is late
+/// at 09:01. The reminder fires at 09:00 on the day, like everything else.
+///
+/// ⚠ Done is a TIMESTAMP, not a bool. Ticking it off is itself a dated event —
+/// "when did I actually send that" — and a bool would throw the answer away.
+@DataClassName('Task')
+class Tasks extends Table {
+  TextColumn get id => text().clientDefault(newId)();
+  TextColumn get title => text()();
+  TextColumn get notes => text().nullable()();
+
+  /// ⚠ For ORDER, not display. Ids are random UUIDs and updatedAt moves on
+  /// every edit, so without this an undated checklist has no stable order and
+  /// reshuffles each time an item is touched.
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Null means "no date" — a checklist item, which is the normal case.
+  DateTimeColumn get dueDate => dateTime().nullable()();
+  DateTimeColumn get doneAt => dateTime().nullable()();
+  TextColumn get personId => text().nullable()();
+  TextColumn get engagementId => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [
+  People, Occasions, Engagements, Money, Notes, Touches, Meetings, Tasks
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'personal_crm'));
   AppDatabase.forTesting(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -246,6 +279,10 @@ class AppDatabase extends _$AppDatabase {
           // because by now this database holds real contacts.
           if (from < 5) {
             await m.createTable(meetings);
+          }
+          // v6 adds tasks. ⚠ createTable only, same as v5 — real data.
+          if (from < 6) {
+            await m.createTable(tasks);
           }
         },
       );
@@ -370,6 +407,39 @@ extension Queries on AppDatabase {
       .get();
 
   Future<int> addMeeting(MeetingsCompanion m) => into(meetings).insert(m);
+
+  // ── Tasks ───────────────────────────────────────────────────────────────
+  Stream<List<Task>> watchTasks() => (select(tasks)
+        ..where((t) => t.deletedAt.isNull())
+        ..orderBy([(t) => OrderingTerm.asc(t.dueDate)]))
+      .watch();
+
+  Future<List<Task>> allTasks() => (select(tasks)
+        ..where((t) => t.deletedAt.isNull())
+        ..orderBy([(t) => OrderingTerm.asc(t.dueDate)]))
+      .get();
+
+  Stream<List<Task>> watchTasksForPerson(String personId) => (select(tasks)
+        ..where((t) => t.deletedAt.isNull() & t.personId.equals(personId))
+        ..orderBy([(t) => OrderingTerm.asc(t.dueDate)]))
+      .watch();
+
+  Stream<List<Task>> watchTasksForEngagement(String engagementId) =>
+      (select(tasks)
+            ..where((t) =>
+                t.deletedAt.isNull() & t.engagementId.equals(engagementId))
+            ..orderBy([(t) => OrderingTerm.asc(t.dueDate)]))
+          .watch();
+
+  Future<int> addTask(TasksCompanion t) => into(tasks).insert(t);
+
+  /// ⚠ Stamps updatedAt like every other write, or the row never syncs.
+  Future<void> updateTask(String id, TasksCompanion patch) =>
+      (update(tasks)..where((t) => t.id.equals(id)))
+          .write(patch.copyWith(updatedAt: Value(DateTime.now())));
+
+  Future<void> setTaskDone(String id, bool done) =>
+      updateTask(id, TasksCompanion(doneAt: Value(done ? DateTime.now() : null)));
 
   Future<List<Touch>> allTouches() => (select(touches)
         ..where((t) => t.deletedAt.isNull())

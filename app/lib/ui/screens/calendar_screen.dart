@@ -4,6 +4,7 @@ import '../../domain/agenda.dart';
 import '../../domain/money_fmt.dart';
 import '../../theme/tokens.dart';
 import '../meeting_sheet.dart';
+import '../task_sheet.dart';
 import '../shell.dart';
 import '../widgets/app_icon.dart';
 import '../widgets/primitives.dart';
@@ -70,12 +71,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final t = AppTokens.of(context);
     return ScreenBody(
       title: 'Calendar',
-      trailing: Btn('New meeting',
-          variant: BtnVariant.primary,
-          onPressed: () async {
-            await MeetingSheet.show(context, widget.db, presetDay: _selected);
-            _reload();
-          }),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        Btn('New task', onPressed: () async {
+          await TaskSheet.show(context, widget.db, presetDay: _selected);
+          _reload();
+        }),
+        const SizedBox(width: 8),
+        Btn('New meeting',
+            variant: BtnVariant.primary,
+            onPressed: () async {
+              await MeetingSheet.show(context, widget.db,
+                  presetDay: _selected);
+              _reload();
+            }),
+      ]),
       child: FutureBuilder<List<AgendaEntry>>(
         future: _agenda,
         builder: (context, snap) {
@@ -146,6 +155,9 @@ const _weekdayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 /// the person timeline cannot teach three different colour languages.
 Tone toneFor(String kind, AppTokens t) => switch (kind) {
       'meeting' => t.success,
+      // No sixth semantic tone exists, and every one of the five is taken, so
+      // tasks borrow the accent rather than doubling up on a meaning.
+      'task' => Tone(dot: t.accent, wash: t.accentWash, text: t.accent),
       'occasion' => t.attention,
       'ping' => t.info,
       'money' => t.danger,
@@ -374,16 +386,25 @@ class _EntryRow extends StatelessWidget {
     final t = AppTokens.of(context);
     final tone = toneFor(entry.kind, t);
     final meeting = entry.meeting;
+    final task = entry.task;
+    final done = task?.doneAt != null;
 
     return MouseRegion(
-      cursor: meeting == null ? MouseCursor.defer : SystemMouseCursors.click,
+      cursor: meeting == null && task == null
+          ? MouseCursor.defer
+          : SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: meeting == null
-            ? null
-            : () async {
+        onTap: meeting != null
+            ? () async {
                 await MeetingSheet.show(context, db, existing: meeting);
                 onChanged();
-              },
+              }
+            : task != null
+                ? () async {
+                    await TaskSheet.show(context, db, existing: task);
+                    onChanged();
+                  }
+                : null,
         child: Container(
           constraints: const BoxConstraints(minHeight: D.listRowTwoLine),
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
@@ -412,7 +433,9 @@ class _EntryRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: T.body.copyWith(
-                          color: t.textPrimary, fontWeight: FontWeight.w600)),
+                          color: done ? t.textMuted : t.textPrimary,
+                          decoration: done ? TextDecoration.lineThrough : null,
+                          fontWeight: FontWeight.w600)),
                   if ((entry.subtitle ?? '').isNotEmpty)
                     Text(entry.subtitle!,
                         maxLines: 1,

@@ -13,12 +13,13 @@ class AgendaEntry {
     this.subtitle,
     this.personId,
     this.meeting,
+    this.task,
     this.hasTime = false,
   });
 
   final DateTime at;
 
-  /// meeting | occasion | ping | touch | money
+  /// meeting | task | occasion | ping | touch | money
   final String kind;
   final String title;
   final String? subtitle;
@@ -26,6 +27,9 @@ class AgendaEntry {
 
   /// Present only for meetings, so the UI can open or edit the real row.
   final Meeting? meeting;
+
+  /// Present only for tasks, for the same reason.
+  final Task? task;
 
   /// ⚠ Meetings are the only kind with a clock. Everything else is a whole
   /// day, and rendering "09:00" against a festival would invent precision the
@@ -67,6 +71,26 @@ Future<List<AgendaEntry>> loadAgenda(
       personId: m.personId,
       meeting: m,
       hasTime: true,
+    ));
+  }
+
+  final projects = await db.engagementsById();
+  for (final t in await db.allTasks()) {
+    final due = t.dueDate;
+    if (due == null || !inRange(due)) continue;
+    out.add(AgendaEntry(
+      at: due,
+      kind: 'task',
+      title: t.title,
+      subtitle: [
+        // ⚠ Done tasks stay on their day. The calendar is also where you look
+        // back, and a ticked-off task vanishing reads as one that never was.
+        if (t.doneAt != null) 'done',
+        ?people[t.personId]?.name,
+        ?projects[t.engagementId]?.name,
+      ].join(' · '),
+      personId: t.personId,
+      task: t,
     ));
   }
 

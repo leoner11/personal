@@ -5,6 +5,7 @@ import '../../domain/money_fmt.dart';
 import '../../theme/tokens.dart';
 import '../shell.dart';
 import '../widgets/pickers.dart';
+import 'tasks_screen.dart';
 import '../widgets/primitives.dart';
 
 const kTypes = ['deal', 'jv', 'client', 'lead'];
@@ -254,6 +255,15 @@ class _ProjectSheetState extends State<ProjectSheet> {
                   hint: 'quotation sent / went quiet'),
               const SizedBox(height: 10),
               Field(label: 'Notes', controller: _notes, hint: 'optional', maxLines: 3),
+              // Only once the project exists — a task cannot link to a row
+              // that has not been saved yet.
+              if (editing) ...[
+                const SizedBox(height: 14),
+                LinkedTasks(
+                    db: widget.db,
+                    stream: widget.db.watchTasksForEngagement(widget.existing!.id),
+                    presetProject: widget.existing),
+              ],
               const SizedBox(height: 10),
               Field(label: 'Value', controller: _value, hint: 'optional'),
               const SizedBox(height: 8),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/notifications.dart';
+import '../../domain/tasks.dart';
 import '../../domain/today.dart';
 import '../../theme/tokens.dart';
 import '../shell.dart';
@@ -133,6 +134,66 @@ class _TodayScreenState extends State<TodayScreen> {
                           size: BtnSize.sm,
                           variant: BtnVariant.ghost,
                           onPressed: () => onGo(Section.calendar)),
+                    ]),
+                  ),
+                ),
+            ]));
+          }
+
+          // ⚠ Straight after meetings. Something due today is the next most
+          // time-critical thing after a commitment at a clock time.
+          if (d.tasks.isNotEmpty) {
+            final now = DateTime.now();
+            blocks.add(_Section('Tasks', [
+              for (final task in d.tasks)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Panel(
+                    child: Row(children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              StatusTag(
+                                  tone: groupOf(task, now) == TaskGroup.overdue
+                                      ? t.danger
+                                      : t.attention,
+                                  label: dueLabel(task.dueDate!, now)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(task.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: T.body.copyWith(
+                                        color: t.textPrimary,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                            ]),
+                            if ((task.notes ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(task.notes!.split('\n').first,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: T.secondary
+                                      .copyWith(color: t.textSecondary)),
+                            ],
+                          ],
+                        ),
+                      ),
+                      Btn('Done',
+                          size: BtnSize.sm,
+                          variant: BtnVariant.ghost,
+                          onPressed: () async {
+                            await db.setTaskDone(task.id, true);
+                            await appNotifierReschedule();
+                            _refresh();
+                          }),
+                      const SizedBox(width: 4),
+                      Btn('Open',
+                          size: BtnSize.sm,
+                          variant: BtnVariant.ghost,
+                          onPressed: () => onGo(Section.tasks)),
                     ]),
                   ),
                 ),
