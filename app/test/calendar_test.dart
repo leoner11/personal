@@ -6,6 +6,7 @@ import 'package:personal_crm/domain/agenda.dart';
 import 'package:personal_crm/domain/today.dart';
 import 'package:flutter/material.dart';
 import 'package:personal_crm/domain/ics.dart';
+import 'package:personal_crm/domain/notifications.dart';
 import 'package:personal_crm/theme/tokens.dart';
 import 'package:personal_crm/ui/screens/calendar_screen.dart';
 
@@ -316,6 +317,34 @@ void main() {
       await db.updateMeeting(
           'm1', MeetingsCompanion(deletedAt: Value(DateTime.now())));
       expect((await loadToday(db)).meetings, isEmpty);
+    });
+  });
+
+  group('notification ids', () {
+    // ⚠ Eight slots per row (three bits). Every dated thing this app schedules
+    // has to own a distinct one, or rescheduling cancels a reminder it did not
+    // mean to and the loss is completely silent.
+    test('a meeting\'s two reminders do not collide with each other', () {
+      const id = 'meeting-abc';
+      expect(notificationId(id, 4), isNot(notificationId(id, 5)));
+    });
+
+    test('every slot in use is distinct for one row', () {
+      // 0 ping · 1 occasion T-14 · 2 occasion T-3 · 3 occasion T+1
+      // 4 meeting T-1h · 5 meeting T-1day
+      const id = 'row-1';
+      final used = [0, 1, 2, 3, 4, 5].map((s) => notificationId(id, s)).toSet();
+      expect(used.length, 6);
+    });
+
+    test('the same slot on different rows does not collide', () {
+      expect(notificationId('meeting-a', 5), isNot(notificationId('meeting-b', 5)));
+    });
+
+    test('slots stay inside the three bits they are given', () {
+      // ⚠ slot & 0x7 silently wraps: slot 8 would land on slot 0, which is the
+      // person ping. Nothing uses 8 today; this is the guard if anything does.
+      expect(notificationId('x', 8), notificationId('x', 0));
     });
   });
 }

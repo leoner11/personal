@@ -187,18 +187,30 @@ class Notifier {
           'Mark ${o.name} gift spend as actual?', 'Confirm what was spent');
     }
 
-    // Meetings. ⚠ These are the only notifications NOT pinned to 09:00.
-    // A 3pm coffee reminded at 9am is a reminder you have forgotten again by
-    // lunch, so it fires an hour before — see [_atExactly].
+    // Meetings get TWO reminders, because they answer different questions.
     for (final m in await db.allMeetings()) {
+      final where = (m.location ?? '').isNotEmpty ? m.location! : null;
+
+      // T-1 day, at 09:00 like everything else in this app. ⚠ This is the one
+      // that is actually useful: an hour before is too late to prepare
+      // anything, dig out a document, or move it if the day has fallen apart.
+      // The body leads with the time, because "tomorrow" without it is not
+      // information you can act on.
+      n += await _at(
+        notificationId(m.id, 5),
+        m.startsAt.subtract(const Duration(days: 1)),
+        'Tomorrow: ${m.title}',
+        ['at ${fmtClock(m.startsAt)}', ?where].join(' · '),
+      );
+
+      // T-1 hour. ⚠ The only notification in this app NOT pinned to 09:00 —
+      // a 15:00 coffee reminded at 09:00 is one you have forgotten again by
+      // lunch. See [_atExactly].
       n += await _atExactly(
         notificationId(m.id, 4),
         m.startsAt.subtract(const Duration(hours: 1)),
         m.title,
-        [
-          fmtClock(m.startsAt),
-          if ((m.location ?? '').isNotEmpty) m.location!,
-        ].join(' · '),
+        [fmtClock(m.startsAt), ?where].join(' · '),
       );
     }
 
