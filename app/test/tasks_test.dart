@@ -97,7 +97,7 @@ void main() {
         () async {
       await db.addTask(TasksCompanion.insert(
           id: const Value('t1'),
-          title: 'Call Lucy',
+          title: 'Call Pak Budi',
           updatedAt: Value(DateTime(2026, 1, 1))));
 
       await db.setTaskDone('t1', true);
@@ -226,7 +226,7 @@ void main() {
 
     testWidgets('ticking the box marks the row done in the database',
         (tester) async {
-      await tester.runAsync(() => add('Call Lucy'));
+      await tester.runAsync(() => add('Call Pak Budi'));
       await tester.pumpWidget(host(TasksScreen(db: db)));
       await settle(tester);
 
@@ -246,8 +246,8 @@ void main() {
         for (final (title, due) in [
           ('Send the Odoo compatibility quotation to the warehouse team', day(-4)),
           ('Confirm the 中秋节 gift list and the delivery address', day(0)),
-          ('Follow up with Lucy about the second milestone invoice', day(6)),
-          ('Write down everything from the Haining trip before it fades', null),
+          ('Follow up with Pak Budi about the second milestone invoice', day(6)),
+          ('Write down everything from the site visit before it fades', null),
         ]) {
           await db.addTask(TasksCompanion.insert(
               title: title, dueDate: Value(due), personId: const Value('p1')));

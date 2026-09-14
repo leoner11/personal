@@ -310,7 +310,7 @@ class TaskSyncTests(TestCase):
         self.assertEqual(rows[0]["person_id"], "p1")
 
     def test_ticking_off_on_one_device_reaches_the_other(self):
-        row = {"id": "t1", "title": "Call Lucy", "created_at": "2026-09-13T02:00:00Z"}
+        row = {"id": "t1", "title": "Call Pak Budi", "created_at": "2026-09-13T02:00:00Z"}
         for done in (None, "2026-09-14T03:00:00Z"):
             self.client.post(
                 "/sync",
