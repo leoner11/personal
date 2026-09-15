@@ -7,6 +7,7 @@ import '../../domain/recency.dart';
 import '../../domain/occasions.dart';
 import '../../theme/tokens.dart';
 import '../add_person_sheet.dart';
+import '../platform.dart';
 import '../shell.dart';
 import 'projects_screen.dart';
 import 'tasks_screen.dart';
@@ -45,11 +46,11 @@ class _PeopleScreenState extends State<PeopleScreen> {
     final t = AppTokens.of(context);
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyN, meta: true): () async {
+        cmd(LogicalKeyboardKey.keyN): () async {
           await AddPersonSheet.show(context, widget.db);
           _refreshTouches();
         },
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+        cmd(LogicalKeyboardKey.keyF):
             _searchFocus.requestFocus,
       },
       child: StreamBuilder<List<Person>>(
@@ -77,7 +78,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
                 border: Border(right: BorderSide(color: t.line)),
               ),
               child: Column(children: [
-                const SizedBox(height: 38),
+                SizedBox(height: titlebarInset),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                   child: SizedBox(
@@ -105,7 +106,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
                 ),
                 Expanded(
                   child: rows.isEmpty
-                      ? const EmptyLine('No one yet. ⌘N to add.')
+                      ? EmptyLine('No one yet. ${cmdLabel('N')} to add.')
                       : _grouped(rows, t),
                 ),
               ]),

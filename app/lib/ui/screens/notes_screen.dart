@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../theme/tokens.dart';
+import '../platform.dart';
 import '../shell.dart';
 import '../widgets/pickers.dart';
 import '../widgets/primitives.dart';
@@ -115,7 +116,7 @@ class _NotesScreenState extends State<NotesScreen> {
               border: Border(right: BorderSide(color: t.line)),
             ),
             child: Column(children: [
-              const SizedBox(height: 38),
+              SizedBox(height: titlebarInset),
               if (tags.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),

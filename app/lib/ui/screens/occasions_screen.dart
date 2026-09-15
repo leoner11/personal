@@ -5,6 +5,7 @@ import '../../domain/channel.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/occasions.dart';
 import '../../theme/tokens.dart';
+import '../platform.dart';
 import '../shell.dart';
 import '../widgets/primitives.dart';
 
@@ -85,7 +86,7 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
               border: Border(right: BorderSide(color: t.line)),
             ),
             child: Column(children: [
-              const SizedBox(height: 38),
+              SizedBox(height: titlebarInset),
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                 child: Row(children: [

@@ -66,12 +66,12 @@ class Notifier {
   Future<void> init() async {
     tzdata.initializeTimeZones();
     final info = await FlutterTimezone.getLocalTimezone();
-    tz.setLocalLocation(tz.getLocation(info.identifier));
+    tz.setLocalLocation(_localLocation(info.identifier));
 
     // ⚠ initialize() throws ArgumentError if the settings for the platform it
-    // is running on are absent. All three are declared or the phone dies on
-    // launch. iOS deliberately does NOT request here — see _checkReady().
-    await _plugin.initialize(
+    // is running on are absent. All four are declared or that platform dies
+    // on launch. iOS deliberately does NOT request here — see _checkReady().
+    final initialized = await _plugin.initialize(
       // ⚠ Without this the tap is dead: the app comes to the foreground on
       // whatever tab it was left on, which is Capture. B1 -> B2 is the loop
       // the whole app exists for and the notification is its first step.
@@ -94,15 +94,28 @@ class Notifier {
         // one keeps the ink and drops the card to transparent, so the mark
         // still reads as a mark.
         android: AndroidInitializationSettings('@drawable/ic_notification'),
+        // ⚠ The GUID is the COM activator Windows calls when a toast is
+        // clicked. It must never change: a new one orphans every toast
+        // scheduled by the previous build.
+        windows: WindowsInitializationSettings(
+          appName: 'Personal',
+          appUserModelId: 'MJCXStudio.Personal',
+          guid: '5f2a8c1e-3b7d-4e96-a0d4-9c61b8e2f357',
+        ),
       ),
     );
-    _ready = await _checkReady();
+    _ready = await _checkReady(initialized: initialized ?? false);
   }
 
   /// ⚠ `_ready` must stay honest. A notifier that reports ready when it is not
   /// is this app's worst failure mode — the calendar looks armed and fires
   /// nothing, which is indistinguishable from a quiet month.
-  Future<bool> _checkReady() async {
+  Future<bool> _checkReady({required bool initialized}) async {
+    // Windows has no permission prompt to wait on. Toasts are allowed unless
+    // turned off in Settings, which no API here can read, so the honest
+    // answer is whether the app managed to register itself.
+    if (Platform.isWindows) return initialized;
+
     // ⚠ SPIKE 0.1b: on macOS initialize() returns BEFORE the permission prompt
     // is answered, so its return value is meaningless. Ask the system instead.
     if (Platform.isMacOS) {
@@ -274,6 +287,7 @@ class Notifier {
           // from this app before the text is read.
           color: Color(0xFF2F6B4F),
         ),
+        windows: WindowsNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
@@ -293,6 +307,21 @@ class Notifier {
 
   Future<int> pendingCount() async =>
       (await _plugin.pendingNotificationRequests()).length;
+}
+
+/// ⚠ On Windows the zone is the Windows zone name mapped to IANA through ICU,
+/// and one with no mapping arrives as "Etc/Unknown". getLocation() throws on
+/// that before the first frame, so the app would never open. Any zone with
+/// today's offset is good enough: every reminder here is "09:00 local".
+tz.Location _localLocation(String id) {
+  try {
+    return tz.getLocation(id);
+  } on tz.LocationNotFoundException {
+    final offset = DateTime.now().timeZoneOffset;
+    return tz.timeZoneDatabase.locations.values.firstWhere(
+        (l) => l.currentTimeZone.offset == offset,
+        orElse: () => tz.UTC);
+  }
 }
 
 /// ⚠ Kept as an alias. The implementation moved to money_fmt.dart so the

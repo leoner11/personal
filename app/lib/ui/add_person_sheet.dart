@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../data/database.dart';
 import '../domain/occasions.dart';
 import '../theme/tokens.dart';
+import 'platform.dart';
 import 'widgets/primitives.dart';
 
 /// A1 — Add Person, and editing one. ⚠ If logging a person takes more than ~10
@@ -167,8 +168,8 @@ class _AddPersonSheetState extends State<AddPersonSheet> {
           borderRadius: BorderRadius.circular(D.radiusPanel)),
       child: CallbackShortcuts(
         bindings: {
-          // ⌘⏎ confirms the primary action in a sheet.
-          const SingleActivator(LogicalKeyboardKey.enter, meta: true): _save,
+          // ⌘⏎ (Ctrl+Enter on Windows) confirms the primary action in a sheet.
+          cmd(LogicalKeyboardKey.enter): _save,
         },
         child: Focus(
           autofocus: true,

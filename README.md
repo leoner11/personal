@@ -5,12 +5,12 @@
 <h1 align="center">Personal</h1>
 
 <p align="center">
-  A local-first personal CRM that tells you who needs you today.<br>
-  Festivals, follow-ups, meetings and tasks, for the people you actually know.
+  personal crm, literally<br>
+  i promise u, no more AI integrations
 </p>
 
 <p align="center">
-  <a href="https://github.com/leoner11/personal/releases/latest"><b>Download for macOS</b></a> ·
+  <a href="https://github.com/leoner11/personal/releases/latest"><b>Download for macOS or Windows</b></a> ·
   <a href="#build-from-source">Build from source</a> ·
   <a href="server/README.md">Sync server</a>
 </p>
@@ -18,6 +18,8 @@
 ---
 
 ## Why
+
+(THIS IS AI WRITTEN BUT ITS TRUEEEE)
 
 Most personal CRMs fail the same way: you stop opening them by week three. Personal is built
 around that failure rather than around a contact database.
@@ -31,13 +33,16 @@ around that failure rather than around a contact database.
 - **Local-first.** Everything lives in a SQLite database on your machine. Sync is optional and
   never blocks a screen.
 
+
 ## Features
+
+(THIS IS AI WRITTEN BUT ITS ALSO TRUEEEE)
 
 | | |
 |---|---|
 | ☀️ **Today** | Meetings today and tomorrow, tasks due or overdue, occasions in the next 14 days, follow-up pings, and expected money to confirm. |
 | ✅ **Tasks** | Type a line and press Enter. Add a due date or link a person or project when it matters. Tasks show on the calendar, and on Today when due. |
-| 📅 **Calendar** | Month grid with the day's detail beneath. Meetings with time, place and links, reminded the day before and an hour before. Export a meeting to macOS Calendar. |
+| 📅 **Calendar** | Month grid with the day's detail beneath. Meetings with time, place and links, reminded the day before and an hour before. Export a meeting to your calendar app. |
 | 👥 **People** | WhatsApp or WeChat channel, occasion tags, follow-up pings, and a timeline of touches, notes, money and meetings. |
 | 🎁 **Occasions** | A seeded three-year calendar of Chinese, Indonesian and Malaysian festivals. Reminders go to anyone tagged, and you are warned before the calendar runs out. |
 | 📁 **Projects** | Deals, JVs, clients and leads, with a free-text status, on purpose. It is not a sales pipeline. |
@@ -46,8 +51,11 @@ around that failure rather than around a contact database.
 
 ## Download
 
-Get the latest macOS build from **[Releases](https://github.com/leoner11/personal/releases/latest)**:
-download `Personal-v1.0-macOS.zip`, unzip it, and move **Personal.app** to Applications.
+Get the latest build from **[Releases](https://github.com/leoner11/personal/releases/latest)**.
+
+### macOS
+
+Download `Personal-<version>-macOS.zip`, unzip it, and move **Personal.app** to Applications.
 
 The build is not notarized, so macOS blocks the first launch. Either:
 
@@ -59,7 +67,23 @@ The build is not notarized, so macOS blocks the first launch. Either:
 > in **System Settings → Notifications → Personal**. Without it nothing is scheduled, and the
 > app gives no sign of it: a missing permission looks exactly like a quiet day.
 
-The download is local-only. To sync between devices, run your own
+### Windows
+
+Download `Personal-<version>-Windows.zip`, unzip it anywhere (for example into
+`C:\Users\<you>\Apps`), and run **Personal\Personal.exe**. Keep the folder together: the exe needs
+the files beside it.
+
+The build is not code-signed, so SmartScreen may say *Windows protected your PC*. Click
+**More info → Run anyway**.
+
+Windows does not ask for notification permission. If reminders never appear, check
+**Settings → System → Notifications** and make sure Personal and notifications in general are on.
+
+> [!NOTE]
+> The Windows build is new and has not yet been tried on a real PC. Reports of anything that
+> looks wrong are very welcome.
+
+The downloads are local-only. To sync between devices, run your own
 [sync server](server/README.md) and build the app with its address (see below).
 
 ## Platforms
@@ -67,24 +91,38 @@ The download is local-only. To sync between devices, run your own
 | Platform | Status |
 |---|---|
 | macOS 10.15+ | ✅ Primary client, in daily use |
+| Windows 10+ | 🟡 Builds in CI; not yet run on a real PC |
 | Android | 🟡 Builds and runs; tested on an emulator only |
 | iOS | 🟡 Compiles; not yet run on a device |
-| Windows / Linux | ❌ Not yet. Notifications need a platform-specific path |
+| Linux | ❌ Not yet |
+
+Mac and Windows share the same desktop layout. On Windows the app keeps the normal title bar,
+and shortcuts use **Ctrl** where the Mac uses **⌘** (Ctrl+1 to Ctrl+8 for sections, Ctrl+N to
+add a person).
 
 The phone client is a separate shell built for one hand. Capture is its first tab, and it
-shares all of its domain logic with the Mac.
+shares all of its domain logic with the desktop app.
 
 ## Build from source
 
-Requires Flutter (stable, 3.41 or later) and Xcode.
+Requires Flutter (stable, 3.41 or later), plus Xcode for macOS or Visual Studio 2022 with
+**Desktop development with C++** for Windows. Each platform has to be built on that platform.
 
 ```bash
 git clone https://github.com/leoner11/personal.git
 cd personal/app
 flutter pub get
-flutter build macos --release
+
+flutter build macos --release     # on a Mac
 # → build/macos/Build/Products/Release/Personal.app
+
+flutter build windows --release   # on Windows
+# → build\windows\x64\runner\Release\Personal.exe
 ```
+
+Publishing a GitHub release also runs [`.github/workflows/windows.yml`](.github/workflows/windows.yml),
+which builds the Windows app and attaches `Personal-<tag>-Windows.zip` to the release. It can
+be run by hand from the Actions tab too.
 
 To sync, set `kSyncBaseUrl` in [`app/lib/domain/config.dart`](app/lib/domain/config.dart) to
 your server's `https://` address before building. Plain `http://` is refused on purpose. Then
@@ -107,8 +145,9 @@ Details, environment variables and what is exposed: [`server/README.md`](server/
 
 | | |
 |---|---|
-| Where | `~/Library/Containers/com.mjcxstudio.personalCrm/Data/Documents/personal_crm.sqlite` |
-| Backup | `sqlite3 <that path> ".backup '$HOME/personal-backup.sqlite'"` |
+| Where (macOS) | `~/Library/Containers/com.mjcxstudio.personalCrm/Data/Documents/personal_crm.sqlite` |
+| Where (Windows) | `%USERPROFILE%\Documents\personal_crm.sqlite` |
+| Backup | `sqlite3 <that path> ".backup 'personal-backup.sqlite'"`, or copy the file while the app is closed |
 | Deletes | Soft deletes only, so another device can learn a row is gone |
 | Upgrades | Schema migrations run on launch and only add. Back up before installing a new version. |
 
@@ -121,9 +160,10 @@ outside changes until it restarts.
 app/
   lib/data/      drift schema and queries (SQLite)
   lib/domain/    shared logic: Today, agenda, tasks, notifications, sync, auth
-  lib/ui/        Mac shell and screens
+  lib/ui/        desktop shell and screens (Mac and Windows)
   lib/ui/phone/  phone shell and screens
   test/          unit and widget tests
+  windows/       Windows runner: exe name, icon, version info
 server/
   core/          models, sync, auth, tests
   deploy/        bootstrap, update, Caddy, systemd

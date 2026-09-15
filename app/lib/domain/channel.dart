@@ -16,10 +16,13 @@ Channel channelFrom(String s) => s == 'wechat' ? Channel.wechat : Channel.wa;
 /// On iOS/Android, `wa.me` is the correct link and `whatsapp://` is not.
 /// Both prior design docs specify wa.me throughout; that is right for the
 /// phone client in Phase 7 and wrong for the Mac client being built now.
+///
+/// Windows follows the Mac: WhatsApp Desktop registers the same `whatsapp:`
+/// protocol, and wa.me opens the browser. Not yet confirmed on a machine.
 Uri whatsappUri(String number, String text) {
   final digits = number.replaceAll(RegExp(r'[^0-9]'), '');
   final body = Uri.encodeComponent(text);
-  return Platform.isMacOS
+  return Platform.isMacOS || Platform.isWindows
       ? Uri.parse('whatsapp://send?phone=$digits&text=$body')
       : Uri.parse('https://wa.me/$digits?text=$body');
 }

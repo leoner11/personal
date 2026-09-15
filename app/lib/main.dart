@@ -51,14 +51,17 @@ Future<void> main() async {
 Future<void> _setUpWindow() async {
   await windowManager.ensureInitialized();
   await windowManager.waitUntilReadyToShow(
-    const WindowOptions(
+    WindowOptions(
       // 200 sidebar + 300 list + 420 detail minimum = 920 of content.
       // The old 720 minimum squeezed the detail pane below its own spec and
       // made fixed-width control rows overflow.
       size: Size(1180, 760),
       minimumSize: Size(960, 600),
       title: 'Personal',
-      titleBarStyle: TitleBarStyle.hidden,
+      // ⚠ Hidden on the Mac only. There the traffic lights survive; on
+      // Windows a hidden titlebar takes minimise, maximise and close with it.
+      titleBarStyle:
+          Platform.isMacOS ? TitleBarStyle.hidden : TitleBarStyle.normal,
       backgroundColor: Colors.transparent,
     ),
     () async => windowManager.show(),

@@ -8,6 +8,7 @@ import '../domain/money_fmt.dart';
 import '../domain/auth.dart';
 import '../domain/sync.dart';
 import 'account_dialog.dart';
+import 'platform.dart';
 import '../theme/tokens.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/money_screen.dart';
@@ -55,11 +56,10 @@ class _ShellState extends State<Shell> {
     return CallbackShortcuts(
       bindings: {
         for (final (i, s) in Section.values.indexed)
-          SingleActivator(
-              LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i),
-              meta: true): () => _go(s),
+          cmd(LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i)): () =>
+              _go(s),
         // Add person from anywhere — the most-used action in the app.
-        const SingleActivator(LogicalKeyboardKey.keyN, meta: true): () =>
+        cmd(LogicalKeyboardKey.keyN): () =>
             AddPersonSheet.show(context, widget.db),
       },
       child: Focus(
@@ -128,8 +128,9 @@ class _Sidebar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Content extends under the native titlebar.
-          const SizedBox(height: 38),
+          // On the Mac, content extends under the hidden titlebar.
+          SizedBox(height: titlebarInset),
+          const _Brand(),
           for (final s in Section.values)
             _NavItem(
               section: s,
@@ -141,6 +142,39 @@ class _Sidebar extends StatelessWidget {
             ),
           const Spacer(),
           _Footer(db: db),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mark plus wordmark. The wordmark asset is coverage only, tinted here, so
+/// it follows the text colour into dark mode instead of staying black.
+class _Brand extends StatelessWidget {
+  const _Brand();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 10, 14),
+      child: Row(
+        children: [
+          const Image(
+            image: AssetImage('assets/brand/sidebar_mark.png'),
+            width: 28,
+            height: 28,
+            filterQuality: FilterQuality.medium,
+          ),
+          const SizedBox(width: 8),
+          Image(
+            image: const AssetImage('assets/brand/sidebar_wordmark.png'),
+            height: 15,
+            color: t.textPrimary,
+            colorBlendMode: BlendMode.srcIn,
+            filterQuality: FilterQuality.medium,
+            semanticLabel: 'Personal',
+          ),
         ],
       ),
     );
@@ -385,18 +419,20 @@ class ScreenBody extends StatelessWidget {
           // drag-to-select and double-click-to-select-a-word to the window
           // manager. The strip below the native titlebar and the title block
           // itself are draggable; nothing else is.
-          const Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 34,
-            child: DragToMoveArea(child: SizedBox.expand()),
-          ),
+          // Windows has its own titlebar to drag, so no strip there.
+          if (isMac)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 34,
+              child: DragToMoveArea(child: SizedBox.expand()),
+            ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 34, 20, 0),
+                padding: EdgeInsets.fromLTRB(20, titlebarInset - 4, 20, 0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
