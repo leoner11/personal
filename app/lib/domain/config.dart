@@ -4,7 +4,10 @@
 ///
 /// Until syncBaseUrl is non-empty, the app is purely local and the sidebar
 /// says so. Nothing else changes; sync is not on the critical path.
-const kSyncBaseUrl = '';           // e.g. 'https://crm.example.com'
+// ⚠ Every build syncs here once this is set, including builds made before the
+// server is deployed: sign-in then says it cannot reach the server, and the
+// app keeps working locally. Deploy first, then ship builds.
+const kSyncBaseUrl = 'https://personal-api.mjcxstudio.com';
 
 // ⚠ There is no token constant here any more. It used to be a shared secret
 // compiled into the app, which meant the same string sat in a public
