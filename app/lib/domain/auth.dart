@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import 'config.dart';
+import 'sync.dart';
 
 /// Sign-in for sync.
 ///
@@ -66,6 +67,8 @@ class AuthApi {
     String path,
     Map<String, dynamic> body, {
     Map<String, String>? extraHeaders,
+    Map<int, String> messages = const {},
+    String? unreachable,
   }) async {
     late http.Response r;
     try {
@@ -83,8 +86,8 @@ class AuthApi {
       // ⚠ A network failure is not a credentials failure, and saying
       // "invalid password" when the wifi is down sends someone to reset a
       // password that was always fine.
-      throw AuthException('Could not reach the server. Check the address '
-          'and your connection.');
+      throw AuthException(unreachable ??
+          'Could not reach the server. Check the address and your connection.');
     }
 
     Map<String, dynamic> decoded = const {};
@@ -97,6 +100,8 @@ class AuthApi {
     if (r.statusCode >= 200 && r.statusCode < 300) return decoded;
 
     final detail = decoded['detail'] as String?;
+    final specific = messages[r.statusCode];
+    if (specific != null) throw AuthException(specific);
     throw AuthException(switch (r.statusCode) {
       401 => 'Wrong username or password.',
       403 => detail ?? 'Registration is closed on this server.',
@@ -136,6 +141,39 @@ class AuthApi {
       {'username': username, 'password': password, 'device': device},
     );
     return (token: d['token'] as String, username: d['username'] as String);
+  }
+
+  /// Deletes the account on the server, with everything it ever synced.
+  ///
+  /// ⚠ NOT best-effort, unlike [logout]. A quiet failure would leave someone
+  /// believing their data is gone from a server that still holds all of it,
+  /// so every failure throws — and each message claims only what is known.
+  /// A wrong password is definitely "nothing deleted"; a lost connection or a
+  /// dead token is not, because the server may have acted before the response
+  /// went missing.
+  Future<void> deleteAccount({
+    required String token,
+    required String password,
+  }) async {
+    await _post(
+      '/auth/delete',
+      {'password': password},
+      extraHeaders: {'Authorization': 'Bearer $token'},
+      messages: const {
+        // ⚠ 403 from here means the PASSWORD; 401 means the TOKEN. The shared
+        // wording ("Wrong username or password") fits neither.
+        403: 'That password is not right. Nothing was deleted.',
+        // ⚠ NOT "nothing was deleted". A delete whose response was lost on
+        // the way back leaves this token dead because the account IS gone —
+        // and the retry lands here. Sign-in tells them which it was.
+        401: 'This device is no longer signed in. If you just tried to '
+            'delete the account, it may already be gone — signing in again '
+            'will tell you.',
+      },
+      // Same reason: a timeout can fall after the server acted.
+      unreachable: 'Could not reach the server, so the account may or may not '
+          'have been deleted. Check your connection and try again.',
+    );
   }
 
   /// ⚠ Best effort. If the server cannot be reached we still forget the token
@@ -218,6 +256,26 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Deletes the account, then signs this device out.
+  ///
+  /// ⚠ This device's DATA STAYS. It was local before the account existed and
+  /// is local after; what goes is the server's copy. The device also forgets
+  /// which account its data belonged to, so a later sign-up — any username,
+  /// including this one again — is a first sign-up and uploads it without a
+  /// combine-or-replace question about an account that no longer exists.
+  Future<void> deleteAccount(String password) async {
+    final t = _token;
+    if (t == null) {
+      throw AuthException('Not signed in. Nothing was deleted.');
+    }
+    await _api.deleteAccount(token: t, password: password);
+    await SyncEngine.forgetDeviceOwnership();
+    await _store.clear();
+    _token = null;
+    _username = null;
+    notifyListeners();
+  }
+
   /// Called when the server rejects a token mid-sync, so a revoked device
   /// stops claiming to be signed in.
   Future<void> forgetRejectedToken() async {
@@ -234,3 +292,14 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+/// What deleting an account does, worded once for both shells. [device] is
+/// "this Mac" / "this phone".
+///
+/// ⚠ Says what goes AND what stays. Someone deleting an account to leave the
+/// service needs to know the server copy is gone; someone doing it to "reset
+/// sync" needs to know it does not wipe the device in their hand.
+String deleteAccountExplainer(String username, String device) =>
+    'This deletes $username and everything synced to it from the server — '
+    'people, notes, money, all of it — and signs out your other devices. '
+    'It cannot be undone.\n\nThe data on $device stays on $device.';

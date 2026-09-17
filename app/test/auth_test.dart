@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:personal_crm/domain/auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// ⚠ Signing in must never become a gate on the app. Local-first is the one
 /// non-negotiable in this project — capture happens in meeting rooms with no
@@ -179,6 +180,103 @@ void main() {
       await auth.forgetRejectedToken();
       expect(auth.signedIn, isFalse);
       expect(store.clears, 1);
+    });
+  });
+
+
+  group('deleting the account', () {
+    // Signs in first, then swaps in the server behaviour under test.
+    Future<AuthState> signedIn(
+        Future<http.Response> Function(http.Request) onDelete) async {
+      SharedPreferences.setMockInitialValues({
+        'sync_owner': 'leonard',
+        'last_synced_at': '2026-09-17T00:00:00Z',
+      });
+      final auth = AuthState(
+        store: store,
+        api: AuthApi(
+          baseUrl: 'https://crm.example.com',
+          client: MockClient((req) => req.url.path == '/auth/login'
+              ? Future.value(http.Response(
+                  jsonEncode({'token': 'tok-1', 'username': 'leonard'}), 200))
+              : onDelete(req)),
+        ),
+      );
+      await auth.login(username: 'leonard', password: 'pw', device: 'Mac');
+      return auth;
+    }
+
+    Future<http.Response> Function(http.Request) reply(int status,
+            {void Function(http.Request)? onCall}) =>
+        (req) async {
+          onCall?.call(req);
+          return http.Response(jsonEncode({'detail': 'x'}), status);
+        };
+
+    test('sends the password in the body with the token, then signs out',
+        () async {
+      late http.Request seen;
+      final auth = await signedIn(
+          reply(200, onCall: (r) => seen = r));
+
+      await auth.deleteAccount('a-long-passphrase-1');
+
+      expect(seen.url.path, '/auth/delete');
+      expect(seen.url.query, isEmpty, reason: 'never in a URL — URLs get logged');
+      expect(seen.headers['Authorization'], 'Bearer tok-1');
+      expect(jsonDecode(seen.body), {'password': 'a-long-passphrase-1'});
+      expect(auth.signedIn, isFalse);
+      expect(await store.token(), isNull);
+    });
+
+    test("forgets whose data this device held, so the next sign-up is a first one",
+        () async {
+      // Otherwise re-registering would ask "combine or replace?" about an
+      // account that no longer exists.
+      final auth = await signedIn(reply(200));
+      await auth.deleteAccount('pw');
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('sync_owner'), isNull);
+      expect(prefs.getString('last_synced_at'), isNull);
+    });
+
+    test('a wrong password says so, deletes nothing, and stays signed in',
+        () async {
+      final auth = await signedIn(reply(403));
+
+      await expectLater(
+          auth.deleteAccount('typo'),
+          throwsA(isA<AuthException>().having((e) => e.message, 'message',
+              'That password is not right. Nothing was deleted.')));
+      expect(auth.signedIn, isTrue, reason: 'a typo must not sign anyone out');
+      // ⚠ The KEYCHAIN too, not just memory — or the next launch would be
+      // signed out after a delete that never happened.
+      expect(await store.token(), 'tok-1');
+      expect((await SharedPreferences.getInstance()).getString('sync_owner'),
+          'leonard');
+    });
+
+    test('a lost connection does not claim nothing was deleted', () async {
+      // ⚠ The request may have landed and the response gone missing.
+      final auth = await signedIn(
+          (_) async => throw http.ClientException('offline'));
+
+      await expectLater(
+          auth.deleteAccount('pw'),
+          throwsA(isA<AuthException>().having((e) => e.message, 'message',
+              allOf(contains('may or may not'), isNot(contains('Nothing was deleted'))))));
+      expect(auth.signedIn, isTrue);
+    });
+
+    test('a dead token does not claim nothing was deleted either', () async {
+      // A retry after a lost response lands here — because the account IS gone.
+      final auth = await signedIn(reply(401));
+      await expectLater(
+          auth.deleteAccount('pw'),
+          throwsA(isA<AuthException>().having((e) => e.message, 'message',
+              allOf(contains('may already be gone'),
+                  isNot(contains('Wrong username'))))));
     });
   });
 

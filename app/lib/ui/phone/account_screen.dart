@@ -306,7 +306,105 @@ class _SignedIn extends StatelessWidget {
             'Signing out only stops syncing. Everything on this phone stays '
             'on this phone, and the other device stays signed in.',
             style: PT.secondary.copyWith(color: t.textMuted)),
+        const SizedBox(height: PD.sectionGap * 2),
+        // ⚠ Far below Sign out, ghost-danger, and behind a password: it has
+        // to be findable (App Store 5.1.1(v)) without ever being the thing a
+        // thumb lands on while reaching for Sign out.
+        PhoneBtn('Delete account',
+            variant: PhoneBtnVariant.danger,
+            expand: true,
+            onPressed: () => PhoneSheet.show<void>(
+                context, (_) => PhoneDeleteAccountSheet(auth: auth))),
       ],
+    );
+  }
+}
+
+/// In-app account deletion (App Store 5.1.1(v), Google Play). Asks for the
+/// password again — core/auth.delete_account explains why a live token on an
+/// unlocked phone must not be enough.
+class PhoneDeleteAccountSheet extends StatefulWidget {
+  const PhoneDeleteAccountSheet({super.key, required this.auth});
+  final AuthState auth;
+
+  @override
+  State<PhoneDeleteAccountSheet> createState() => PhoneDeleteAccountSheetState();
+}
+
+class PhoneDeleteAccountSheetState extends State<PhoneDeleteAccountSheet> {
+  final _password = TextEditingController();
+  bool _reveal = false;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _password.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _delete() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.auth.deleteAccount(_password.text);
+      if (mounted) Navigator.pop(context);
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    final name = widget.auth.username ?? 'this account';
+    return PhoneSheet(
+      title: 'Delete $name?',
+      actions: Row(children: [
+        Expanded(
+          child: PhoneBtn('Cancel',
+              variant: PhoneBtnVariant.ghost,
+              onPressed: _busy ? null : () => Navigator.pop(context)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: PhoneBtn(_busy ? 'Deleting…' : 'Delete',
+              variant: PhoneBtnVariant.danger,
+              onPressed:
+                  _busy || _password.text.isEmpty ? null : _delete),
+        ),
+      ]),
+      child: AbsorbPointer(
+        absorbing: _busy,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(deleteAccountExplainer(name, 'this phone'),
+                style: PT.secondary.copyWith(color: t.textSecondary)),
+            const SizedBox(height: PD.sectionGap),
+            _PasswordField(
+              controller: _password,
+              reveal: _reveal,
+              onToggle: () => setState(() => _reveal = !_reveal),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!,
+                  style: PT.secondary.copyWith(color: t.danger.text)),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

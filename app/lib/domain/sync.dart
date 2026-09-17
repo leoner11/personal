@@ -38,6 +38,14 @@ class SyncEngine {
   static const _kLastSynced = 'last_synced_at';
   static const _kOwner = 'sync_owner';
 
+  /// Called when the account this device synced with is deleted: its data is
+  /// now nobody's, so the next sign-in is a first one.
+  static Future<void> forgetDeviceOwnership() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kOwner);
+    await prefs.remove(_kLastSynced);
+  }
+
   /// Which account the data on this device belongs to. Only tests change it.
   final String ownerKey;
 

@@ -136,6 +136,12 @@ class _AccountDialogState extends State<AccountDialog> {
                 const SizedBox(height: 16),
                 Row(children: [
                   Btn('Sign out', onPressed: auth.logout),
+                  const SizedBox(width: 8),
+                  // ⚠ Ghost, never filled: the house has no filled danger
+                  // button, and the dialog behind it asks for the password.
+                  Btn('Delete account…',
+                      variant: BtnVariant.ghost,
+                      onPressed: () => DeleteAccountDialog.show(context, auth)),
                   const Spacer(),
                   Btn('Close',
                       variant: BtnVariant.primary,
@@ -190,6 +196,102 @@ class _AccountDialogState extends State<AccountDialog> {
                       onPressed: _canSubmit ? _submit : null),
                 ]),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// In-app account deletion (App Store 5.1.1(v), Google Play). Needs the
+/// password again — see core/auth.delete_account for why a token is not
+/// enough for the one irreversible thing the server does.
+class DeleteAccountDialog extends StatefulWidget {
+  const DeleteAccountDialog({super.key, required this.auth});
+  final AuthState auth;
+
+  static Future<void> show(BuildContext context, AuthState auth) =>
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => DeleteAccountDialog(auth: auth),
+      );
+
+  @override
+  State<DeleteAccountDialog> createState() => DeleteAccountDialogState();
+}
+
+class DeleteAccountDialogState extends State<DeleteAccountDialog> {
+  final _password = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _password.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _delete() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.auth.deleteAccount(_password.text);
+      if (mounted) Navigator.pop(context);
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    final name = widget.auth.username ?? 'this account';
+    return Dialog(
+      backgroundColor: t.canvas,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(D.radiusPanel)),
+      child: SizedBox(
+        width: 400,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Delete the account $name?',
+                  style: T.entityName.copyWith(color: t.textPrimary)),
+              const SizedBox(height: 8),
+              Text(deleteAccountExplainer(name, 'this Mac'),
+                  style: T.secondary.copyWith(color: t.textSecondary)),
+              const SizedBox(height: 14),
+              _PasswordField(label: 'Password', controller: _password),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!,
+                    style: T.secondary.copyWith(color: t.danger.text)),
+              ],
+              const SizedBox(height: 16),
+              Row(children: [
+                const Spacer(),
+                Btn('Cancel',
+                    variant: BtnVariant.ghost,
+                    onPressed: _busy ? null : () => Navigator.pop(context)),
+                const SizedBox(width: 8),
+                Btn(_busy ? 'Deleting…' : 'Delete account',
+                    onPressed: _busy || _password.text.isEmpty ? null : _delete),
+              ]),
             ],
           ),
         ),

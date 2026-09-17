@@ -415,3 +415,94 @@ class OccasionTagSyncTests(TestCase):
         )
         self.assertEqual(len(self.pull()), 1)
         self.assertEqual(OccasionTag.objects.filter(client_id="seeded-cny").count(), 2)
+
+
+class AccountDeletionTests(TestCase):
+    """In-app account deletion (App Store 5.1.1(v), Google Play).
+
+    ⚠ The only irreversible thing the API does, so these pin that it takes the
+    RIGHT account, ALL of it, and nothing else — and that a borrowed phone with
+    a live token cannot do it without the password."""
+
+    def setUp(self):
+        cache.clear()
+        self.auth = self.register("leonard", "a-long-passphrase-1")
+        self.other = self.register("sri", "a-long-passphrase-2")
+        for who, name in ((self.auth, "Pak Andi"), (self.other, "Bu Ratna")):
+            self.client.post(
+                "/sync",
+                data=json.dumps({"tables": {
+                    "people": [{"id": f"p-{name}", "name": name}],
+                    "occasion_tags": [{"id": "seeded-cny", "slug": "cny", "label": "春节"}],
+                }}),
+                content_type="application/json",
+                headers=who,
+            )
+
+    def register(self, username, password):
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": username, "password": password}),
+            content_type="application/json",
+        )
+        return {"authorization": f"Bearer {body(r)['token']}"}
+
+    def delete(self, headers, password):
+        return self.client.post(
+            "/auth/delete",
+            data=json.dumps({"password": password}),
+            content_type="application/json",
+            headers=headers,
+        )
+
+    def test_it_needs_a_valid_token(self):
+        self.assertEqual(self.delete({}, "a-long-passphrase-1").status_code, 401)
+        self.assertTrue(User.objects.filter(username="leonard").exists())
+
+    def test_a_token_without_the_password_deletes_nothing(self):
+        # ⚠ The unlocked-phone-on-a-table case.
+        r = self.delete(self.auth, "not-my-password")
+        self.assertEqual(r.status_code, 403, "403, so the client does not sign out")
+        self.assertTrue(User.objects.filter(username="leonard").exists())
+        self.assertEqual(Person.objects.filter(owner__username="leonard").count(), 1)
+
+    def test_the_password_check_is_rate_limited(self):
+        for _ in range(10):
+            self.delete(self.auth, "guess")
+        self.assertEqual(self.delete(self.auth, "a-long-passphrase-1").status_code, 429)
+        self.assertTrue(User.objects.filter(username="leonard").exists())
+
+    def test_it_removes_the_account_everything_it_synced_and_every_device(self):
+        second_device = self.client.post(
+            "/auth/login",
+            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            content_type="application/json",
+        )
+        mac = {"authorization": f"Bearer {body(second_device)['token']}"}
+
+        self.assertEqual(self.delete(self.auth, "a-long-passphrase-1").status_code, 200)
+
+        self.assertFalse(User.objects.filter(username="leonard").exists())
+        # ⚠ Absolute counts. Filtering on owner__username="leonard" after the
+        # user is gone matches nothing whether or not the rows survived.
+        self.assertEqual(list(Person.objects.values_list("name", flat=True)), ["Bu Ratna"])
+        self.assertEqual(OccasionTag.objects.count(), 1)
+        self.assertEqual(AuthToken.objects.count(), 1, "only sri's token remains")
+        # The other device finds out on its next sync, as a 401.
+        self.assertEqual(self.client.get("/sync", headers=mac).status_code, 401)
+
+    def test_it_touches_no_other_account(self):
+        self.delete(self.auth, "a-long-passphrase-1")
+        rows = json.loads(self.client.get("/sync", headers=self.other).content)["tables"]
+        self.assertEqual([p["name"] for p in rows["people"]], ["Bu Ratna"])
+        # Same seeded id, different owner — must survive.
+        self.assertEqual(len(rows["occasion_tags"]), 1)
+
+    def test_the_username_can_start_again_empty(self):
+        self.delete(self.auth, "a-long-passphrase-1")
+        fresh = self.register("leonard", "a-new-long-passphrase")
+        rows = json.loads(self.client.get("/sync", headers=fresh).content)["tables"]
+        self.assertEqual(rows["people"], [])
+
+    def test_only_post(self):
+        self.assertEqual(self.client.get("/auth/delete", headers=self.auth).status_code, 405)
