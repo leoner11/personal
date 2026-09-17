@@ -24,6 +24,15 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- Export compliance: answers App Store Connect's encryption question once,
+	     instead of on every upload. NO is correct because the only encryption in
+	     this app is HTTPS to the sync server and the OS Keychain for the sign-in
+	     token — standard encryption that is exempt.
+	     ⚠ REVISIT IF END-TO-END ENCRYPTION IS EVER ADDED (the parked design in
+	     the handoff). Encrypting synced data with the app's own crypto is not
+	     "HTTPS only" any more, and this answer would need to be re-checked. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- ⚠ Required by the "Add to calendar" row on a meeting. iOS opens its own
 	     pre-filled new-event screen (EKEventEditViewController) and the user
 	     confirms; this app never reads the calendar and never writes without
