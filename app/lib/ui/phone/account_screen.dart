@@ -78,8 +78,10 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
     if (db == null || !widget.auth.signedIn) {
       return;
     }
-    final at = await SyncEngine(db, baseUrl: kSyncBaseUrl,
-            token: widget.auth.token ?? '')
+    final at = await SyncEngine(db,
+            baseUrl: kSyncBaseUrl,
+            token: widget.auth.token ?? '',
+            account: widget.auth.username ?? '')
         .lastSynced();
     if (mounted) {
       setState(() {

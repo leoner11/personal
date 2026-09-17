@@ -6,11 +6,13 @@ import '../../domain/config.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/money_totals.dart';
 import '../../domain/sync.dart';
+import '../../domain/sync_account.dart';
 import '../widgets/app_icon.dart';
 import '../../theme/tokens.dart';
 import 'person_detail_screen.dart';
 import 'phone_pickers.dart';
 import 'phone_primitives.dart';
+import 'sync_join_sheet.dart';
 
 /// ⚠ The stated problem was "I want to know how much money we have." That is
 /// solved by seeing ONE NUMBER OFTEN, not by better accounting — and a phone
@@ -36,15 +38,30 @@ import 'phone_primitives.dart';
 /// desktop shell enforces the same conjunction. When either is missing the
 /// pulse says so instead of spinning at nothing; local queries are never
 /// faked into a reload.
-Future<String> runSyncPulse(AppDatabase db) async {
+Future<String> runSyncPulse(BuildContext context, AppDatabase db) async {
   if (!kSyncEnabled) return 'No server configured';
   final auth = appAuth;
   final token = auth?.token;
   if (auth == null || !auth.signedIn || token == null) {
     return 'Not signed in — local only';
   }
-  final engine = SyncEngine(db, baseUrl: kSyncBaseUrl, token: token);
-  final at = await engine.run();
+  final engine = SyncEngine(db,
+      baseUrl: kSyncBaseUrl, token: token, account: auth.username ?? '');
+  var at = await engine.run();
+
+  // ⚠ This device and the account both hold data. Nothing synced; ask here,
+  // at the pull the user just made, rather than choosing for them.
+  final join = engine.pendingJoin;
+  if (join != null) {
+    if (!context.mounted) return 'Choose how to sync this device';
+    final choice = await PhoneSyncJoinSheet.show(context, join);
+    if (choice == null) return 'Not synced — choose how to combine first';
+    at = await completeJoin(db, engine, choice,
+        backupPath: choice == JoinChoice.useAccount
+            ? await replaceBackupPath()
+            : null);
+  }
+
   // ⚠ A 401 is not a transient failure to retry forever — the token was
   // revoked or the account changed, and only signing in again fixes it.
   if (engine.unauthorized) {
@@ -106,7 +123,7 @@ class _PhoneMoneyScreenState extends State<PhoneMoneyScreen> {
   void _reloadLookups() => setState(() => _lookups = _loadLookups());
 
   Future<void> _pulse() async {
-    final line = await runSyncPulse(widget.db);
+    final line = await runSyncPulse(context, widget.db);
     if (!mounted) return;
     setState(() {
       _syncLine = line;

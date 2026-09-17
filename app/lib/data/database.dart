@@ -892,6 +892,50 @@ extension SyncQueries on AppDatabase {
         serverStamp: Value(serverStamp),
       ));
 
+  /// Queues EVERY row on this device for upload, as if none had ever synced.
+  ///
+  /// Used when this device's data joins a different account ("Combine both").
+  /// Stamps are cleared too: they describe versions on the OLD account's
+  /// server rows, and a stale stamp matching by coincidence would make a pull
+  /// skip a row it must take.
+  Future<void> markEverythingForUpload() => transaction(() async {
+        for (final t in syncedTables) {
+          final name = t.actualTableName;
+          await customStatement(
+              "INSERT INTO sync_state (tbl, row_id, dirty) "
+              "SELECT '$name', id, 0 FROM $name WHERE true "
+              "ON CONFLICT (tbl, row_id) DO NOTHING");
+        }
+        await customStatement(
+            'UPDATE sync_state SET dirty = dirty + 1, server_stamp = NULL');
+      });
+
+  /// Removes every synced row from THIS DEVICE, so an account's data can
+  /// replace it ("Use the account's data").
+  ///
+  /// ⚠ HARD deletes, deliberately — the one place in this app — AND the
+  /// sync_state wipe, together. Soft deletes are updates: the triggers would
+  /// queue every row as a tombstone for the next sync to upload INTO the
+  /// account being joined, deleting that account's copies of any shared id
+  /// (every seeded festival and tag). DELETE fires no trigger, and clearing
+  /// sync_state drops any stamps from the old account.
+  ///
+  /// ⚠ [backupPath] first. This removes real contacts from the device; the
+  /// copy is the way back if the choice was a mistake. `VACUUM INTO` writes a
+  /// consistent single-file snapshot and cannot run inside a transaction, so
+  /// it goes before one.
+  Future<void> wipeSyncedData({String? backupPath}) async {
+    if (backupPath != null) {
+      await customStatement('VACUUM INTO ?', [backupPath]);
+    }
+    await transaction(() async {
+      for (final t in syncedTables) {
+        await customStatement('DELETE FROM ${t.actualTableName}');
+      }
+      await customStatement('DELETE FROM sync_state');
+    });
+  }
+
   /// Tracking for a row that no longer exists (hard-deleted by a migration or
   /// a test). Nothing to upload, so stop trying.
   Future<void> forgetSyncState(String tbl, String rowId) =>

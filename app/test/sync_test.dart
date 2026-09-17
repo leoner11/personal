@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
@@ -8,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:personal_crm/data/database.dart';
 import 'package:personal_crm/domain/notifications.dart';
 import 'package:personal_crm/domain/sync.dart';
+import 'package:personal_crm/domain/sync_account.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// An in-memory stand-in for server/core/sync.py, faithful on the three
@@ -113,8 +115,10 @@ class Device {
     engine = SyncEngine(db,
         baseUrl: 'https://crm.test',
         token: account,
+        account: account,
         client: server.client,
-        lastSyncedKey: 'last_synced_$name');
+        lastSyncedKey: 'last_synced_$name',
+        ownerKey: 'sync_owner_$name');
   }
 
   Future<List<String>> names() async =>
@@ -308,5 +312,185 @@ void main() {
     // from — so a table added there but not tracked fails here.
     expect(server.pushes.single.keys.toSet(),
         db.syncedTables.map((t) => t.actualTableName).toSet());
+  });
+
+  group('joining an account', () {
+    test('signing up with data already on the device uploads it without asking',
+        () async {
+      await mac.addPerson('Pak Andi');
+      await mac.addPerson('Sri');
+
+      expect(await mac.sync(), isNotNull);
+      expect(mac.engine.pendingJoin, isNull);
+      expect(server.rows['people']!.length, 2);
+    });
+
+    test('a device holding only the built-in calendar joins silently',
+        () async {
+      await mac.addPerson('Pak Andi');
+      await mac.sync();
+
+      // Seeds exist on every device; they must not trigger the question.
+      await seedBuiltInTags(phone.db);
+      await seedIfEmpty(phone.db);
+      await phone.sync();
+
+      expect(phone.engine.pendingJoin, isNull);
+      expect(await phone.names(), ['Pak Andi']);
+    });
+
+    test('an account holding only the built-in calendar takes a device\'s data silently',
+        () async {
+      await seedBuiltInTags(mac.db);
+      await seedIfEmpty(mac.db);
+      await mac.sync(); // the account now holds seeds and nothing else
+
+      await phone.addPerson('Mr Tan');
+      await phone.sync();
+
+      expect(phone.engine.pendingJoin, isNull);
+      expect(server.rows['people']!.length, 1);
+    });
+
+    test('a second device with its own data is asked, and nothing syncs first',
+        () async {
+      await mac.addPerson('Pak Andi');
+      await mac.addPerson('Sri');
+      await mac.sync();
+      await phone.addPerson('Mr Tan');
+      final pushesBefore = server.pushes.length;
+
+      expect(await phone.sync(), isNull);
+
+      final join = phone.engine.pendingJoin!;
+      expect(join.here.counts['people'], 1);
+      expect(join.there.counts['people'], 2);
+      expect(join.previousAccount, isNull);
+      // ⚠ Not one row moved either way before the answer.
+      expect(server.pushes.length, pushesBefore);
+      expect(await phone.names(), ['Mr Tan']);
+    });
+
+    test('Combine both brings the two together, on the device and the account',
+        () async {
+      await mac.addPerson('Pak Andi');
+      await mac.addPerson('Sri');
+      await mac.sync();
+      await phone.addPerson('Mr Tan');
+      await phone.sync();
+
+      await completeJoin(phone.db, phone.engine, JoinChoice.combine);
+      await mac.sync();
+
+      const all = ['Mr Tan', 'Pak Andi', 'Sri'];
+      expect(await phone.names(), all);
+      expect(await mac.names(), all);
+      expect(server.rows['people']!.length, 3);
+    });
+
+    test("Use the account's data replaces this device's, and uploads none of it",
+        () async {
+      final andi = await mac.addPerson('Pak Andi');
+      final sri = await mac.addPerson('Sri');
+      await mac.sync();
+      await phone.addPerson('Mr Tan');
+      await phone.sync();
+
+      final dir = Directory.systemTemp.createTempSync('join');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final backup = '${dir.path}/before.sqlite';
+
+      await completeJoin(phone.db, phone.engine, JoinChoice.useAccount,
+          backupPath: backup);
+
+      expect(await phone.names(), ['Pak Andi', 'Sri']);
+      // ⚠ Not even as a tombstone: soft-deleting instead of wiping would have
+      // uploaded Mr Tan as a deleted row into the account.
+      expect(server.rows['people']!.keys.toSet(), {andi, sri});
+      // The wipe took the built-in vocabulary; it has to come back.
+      expect((await phone.db.allOccasionTags()).length, greaterThanOrEqualTo(9));
+      // The way back, if the choice was a mistake.
+      final copy = AppDatabase.forTesting(NativeDatabase(File(backup)));
+      expect([for (final p in await copy.allPeople()) p.name], ['Mr Tan']);
+      await copy.close();
+    });
+
+    test("switching accounts never pours the old account's data into the new one",
+        () async {
+      // ⚠ THE BUG THIS STEP EXISTS FOR. Sign-out keeps local data (local-first)
+      // so signing in as someone else used to upload all of it into their
+      // account on the very next sync.
+      await mac.addPerson('Pak Andi');
+      await mac.sync(); // mac's data now belongs to leonard
+
+      final sriServer = server.of('sri');
+      mac.signIn('sri');
+      expect(await mac.sync(), isNull);
+
+      final join = mac.engine.pendingJoin!;
+      expect(join.previousAccount, 'leonard');
+      expect(sriServer['people'], isNull);
+    });
+
+    test('switching, then Combine, moves data both ways in full', () async {
+      final andi = await mac.addPerson('Pak Andi');
+      await mac.sync(); // clean under leonard now
+
+      // Sri's account already holds a person from long before this device's
+      // last sync point with leonard.
+      server.of('sri')['people'] = {
+        'old': {
+          'id': 'old',
+          'name': 'Bu Ratna',
+          'updated_at': DateTime.utc(2026, 1, 1).toIso8601String(),
+        },
+      };
+
+      mac.signIn('sri');
+      await mac.sync();
+      await completeJoin(mac.db, mac.engine, JoinChoice.combine);
+
+      // ⚠ Already synced with leonard, so NOT dirty — Combine must re-queue it
+      // or it never reaches sri.
+      expect(server.of('sri')['people']!.keys, contains(andi));
+      // ⚠ Older than leonard's sync point — Combine must reset it or this
+      // never comes down.
+      expect(await mac.names(), ['Bu Ratna', 'Pak Andi']);
+    });
+
+    test('switching into an EMPTY account still asks', () async {
+      // Silent here would be the same bug: "sri has nothing, so upload".
+      await mac.addPerson('Pak Andi');
+      await mac.sync();
+
+      mac.signIn('sri');
+      expect(await mac.sync(), isNull);
+      expect(mac.engine.pendingJoin!.there.isEmpty, isTrue);
+      expect(server.of('sri')['people'], isNull);
+    });
+
+    test('signing back into the same account asks nothing', () async {
+      final andi = await mac.addPerson('Pak Andi');
+      await mac.sync();
+
+      await mac.db.updatePerson(
+          andi, const PeopleCompanion(company: Value('PT Formcase')));
+      mac.signIn('leonard');
+      expect(await mac.sync(), isNotNull);
+      expect(mac.engine.pendingJoin, isNull);
+      expect(server.pushes.last['people']!.single['company'], 'PT Formcase');
+    });
+
+    test('an unreachable server neither asks nor records whose data this is',
+        () async {
+      await mac.addPerson('Pak Andi');
+      server.pullStatus = 500;
+
+      expect(await mac.sync(), isNull);
+      expect(mac.engine.pendingJoin, isNull);
+      expect((await SharedPreferences.getInstance()).getString('sync_owner_mac'),
+          isNull);
+      expect(server.rows['people'], isNull);
+    });
   });
 }

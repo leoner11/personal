@@ -50,7 +50,7 @@ class PhoneReviewScreen extends StatelessWidget {
         // up whatever the round-trip writes — the line runSyncPulse returns
         // is Money's grammar; the hub stays wordless (P4).
         onRefresh: () async {
-          await runSyncPulse(db);
+          await runSyncPulse(context, db);
         },
         child: ListView(
           // Short lists must still pull.

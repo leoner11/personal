@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/database.dart';
+import 'sync_account.dart';
 
 /// ⚠ LOCAL-FIRST. Sync failure is a silent no-op that retries later. It NEVER
 /// blocks a screen and never shows an error the user must dismiss. The app
@@ -16,13 +17,18 @@ class SyncEngine {
     this.db, {
     required this.baseUrl,
     required this.token,
+    required this.account,
     http.Client? client,
     @visibleForTesting this.lastSyncedKey = _kLastSynced,
+    @visibleForTesting this.ownerKey = _kOwner,
   }) : _http = client ?? http.Client();
 
   final AppDatabase db;
   final String baseUrl;
   final String token;
+
+  /// The signed-in username. Compared with [ownerKey] before anything syncs.
+  final String account;
   final http.Client _http;
 
   /// Where the last server time is kept. Only tests change it — two simulated
@@ -30,6 +36,14 @@ class SyncEngine {
   final String lastSyncedKey;
 
   static const _kLastSynced = 'last_synced_at';
+  static const _kOwner = 'sync_owner';
+
+  /// Which account the data on this device belongs to. Only tests change it.
+  final String ownerKey;
+
+  /// Set when this device and [account] both hold real data and the user has
+  /// to choose how to join them. While set, [run] syncs nothing.
+  JoinNeeded? pendingJoin;
 
   /// ⚠ How far back each pull reaches before the last server time. The server
   /// reads `server_time` before querying, but a push from the OTHER device can
@@ -59,6 +73,13 @@ class SyncEngine {
   Future<DateTime?> run() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      // ⚠ BEFORE anything is uploaded. If this device's data belongs to a
+      // different account — or to none yet — the first push would pour it
+      // into [account] unasked.
+      if (prefs.getString(ownerKey) != account &&
+          !await _settleOwnership(prefs)) {
+        return null;
+      }
       final since = prefs.getString(lastSyncedKey);
       if (!await _push()) return null;
       final serverTime = await _pull(since);
@@ -70,6 +91,73 @@ class SyncEngine {
       // Silent. Retries on the next launch or the next manual trigger.
       return null;
     }
+  }
+
+  /// Decides, without asking where no question exists, whether this device's
+  /// data can start syncing with [account]. True means go ahead.
+  ///
+  /// Joins silently only where no real question exists:
+  ///   * nothing here worth keeping (a fresh install, or only the built-in
+  ///     calendar) — the account's data simply comes down;
+  ///   * this device has NEVER synced and the account is empty — a first
+  ///     sign-up on a device you already use; its data goes up.
+  /// Otherwise it asks (sets [pendingJoin], returns false).
+  ///
+  /// ⚠ A SWITCH ALWAYS ASKS, even into an empty account. Data that already
+  /// belongs to account A, signed into a fresh account B, is exactly the
+  /// "someone else's contacts poured into my account" case this gate exists
+  /// for. Maybe it IS a fresh start for the same person — then Combine is one
+  /// tap. Guessing wrong the other way cannot be undone.
+  ///
+  /// ⚠ An unreachable server answers nothing and records nothing. Guessing
+  /// "empty" would skip a question that might have mattered.
+  Future<bool> _settleOwnership(SharedPreferences prefs) async {
+    final res = await _http.get(Uri.parse('$baseUrl/sync'), headers: _headers);
+    if (res.statusCode == 401) {
+      unauthorized = true;
+      return false;
+    }
+    if (res.statusCode != 200) return false;
+
+    final remote = ((jsonDecode(res.body) as Map<String, dynamic>)['tables'] ??
+        {}) as Map<String, dynamic>;
+    final here = await localSummary(db);
+    final there = remoteSummary(remote);
+
+    final previous = prefs.getString(ownerKey);
+    if (here.isEmpty || (previous == null && there.isEmpty)) {
+      await _apply(JoinChoice.combine, prefs);
+      return true;
+    }
+    pendingJoin = JoinNeeded(
+      account: account,
+      previousAccount: previous,
+      here: here,
+      there: there,
+    );
+    return false;
+  }
+
+  /// Records the user's answer to [pendingJoin]. Call [run] afterwards — or
+  /// use completeJoin, which does both and restores seeded defaults.
+  Future<void> resolveJoin(JoinChoice choice, {String? backupPath}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await _apply(choice, prefs, backupPath: backupPath);
+    pendingJoin = null;
+  }
+
+  Future<void> _apply(JoinChoice choice, SharedPreferences prefs,
+      {String? backupPath}) async {
+    switch (choice) {
+      case JoinChoice.combine:
+        await db.markEverythingForUpload();
+      case JoinChoice.useAccount:
+        await db.wipeSyncedData(backupPath: backupPath);
+    }
+    // ⚠ The sync point belonged to the previous account's server rows. Kept,
+    // the first pull would skip everything [account] changed before it.
+    await prefs.remove(lastSyncedKey);
+    await prefs.setString(ownerKey, account);
   }
 
   /// Uploads ONLY rows changed on this device since the server last saw them.
