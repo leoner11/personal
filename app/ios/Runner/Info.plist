@@ -24,6 +24,15 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- ⚠ Required by the "Add to calendar" row on a meeting. iOS opens its own
+	     pre-filled new-event screen (EKEventEditViewController) and the user
+	     confirms; this app never reads the calendar and never writes without
+	     that tap. The string is what the permission sheet shows, so it says
+	     what actually happens. -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>Personal adds a meeting to your calendar only when you tap Add to calendar, and never reads what is already there.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Personal adds a meeting to your calendar only when you tap Add to calendar, and never reads what is already there.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

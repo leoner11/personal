@@ -7,6 +7,7 @@ import 'package:personal_crm/main.dart';
 import 'package:personal_crm/theme/tokens.dart';
 import 'package:personal_crm/ui/phone/capture_screen.dart';
 import 'package:personal_crm/ui/phone/phone_shell.dart';
+import 'package:personal_crm/domain/tag_vocab.dart';
 
 /// ⚠ Two separate drift-under-FakeAsync traps are pinned here, both of which
 /// present as "the test file hangs with no output":
@@ -21,8 +22,20 @@ import 'package:personal_crm/ui/phone/phone_shell.dart';
 /// layout tests follow. These pin behaviour, not pixels.
 void main() {
   late AppDatabase db;
-  setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
-  tearDown(() => db.close());
+  setUp(() async {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    // ⚠ The tag vocabulary is a TABLE now, and chips render from it. main()
+    // seeds it before the first frame; a test database starts empty, so
+    // without this every occasion chip is simply absent. refresh() rather
+    // than bind() — a drift stream subscription outlives the test and trips
+    // the pending-timer assertion.
+    await seedBuiltInTags(db);
+    await TagVocab.refresh(db);
+  });
+  tearDown(() async {
+    await TagVocab.reset();
+    await db.close();
+  });
 
   Widget host(Widget child) => MaterialApp(
         theme: buildTheme(Brightness.light),
@@ -73,6 +86,11 @@ void main() {
   /// never fire a FakeTimer.
   Future<void> unmount(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox.shrink());
+    // ⚠ v2: Today schedules a post-collapse sweep ~280ms after EVERY load
+    // (today_screen _sweepSoon — Future.delayed, not a zero-duration drift
+    // timer). The v1 10ms drain cannot fire it, so drain one full sweep
+    // window, then the drift-cancellation turn.
+    await tester.pump(const Duration(milliseconds: PM.clearMs + 120));
     await tester.pump(const Duration(milliseconds: 10));
   }
 

@@ -21,7 +21,15 @@ enum Ic {
   ping(LucideIcons.bell),
   sync(LucideIcons.refreshCw),
   search(LucideIcons.search),
-  copy(LucideIcons.copy);
+  copy(LucideIcons.copy),
+  // ── v2 phone additions (Phone Design v2.0 §3.1). Each earns its place;
+  // the phone previously shipped Material glyphs for all of these.
+  archive(LucideIcons.archive),
+  pencil(LucideIcons.pencil),
+  eye(LucideIcons.eye),
+  chevronRight(LucideIcons.chevronRight),
+  chevronDown(LucideIcons.chevronDown),
+  chevronLeft(LucideIcons.chevronLeft);
 
   const Ic(this.glyph);
   final IconData glyph;
@@ -31,20 +39,26 @@ enum IconScale { nav, inline, row }
 
 class AppIcon extends StatelessWidget {
   const AppIcon(this.icon,
-      {super.key, this.scale = IconScale.inline, this.color});
+      {super.key, this.scale = IconScale.inline, this.color, this.size});
 
   final Ic icon;
   final IconScale scale;
   final Color? color;
 
+  /// Overrides the scale preset — phone chrome (tab bar, nav actions, sheets)
+  /// runs larger than the desktop 16/14/12 rhythm.
+  final double? size;
+
   @override
   Widget build(BuildContext context) => Icon(
         icon.glyph,
-        size: switch (scale) {
-          IconScale.nav => 16,
-          IconScale.inline => 14,
-          IconScale.row => 12,
-        },
+        size: size ??
+            switch (scale) {
+              IconScale.nav => 16,
+              IconScale.inline => 14,
+              IconScale.row => 12,
+            },
         color: color ?? AppTokens.of(context).textSecondary,
       );
 }
+

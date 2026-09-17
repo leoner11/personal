@@ -47,6 +47,12 @@ dependencies:
   uuid: ^4.6.0
   flutter_secure_storage: ^11.1.0
   path_provider: ^2.1.6
+  # ⚠ Mobile only. The desktop hands Calendar.app a file:// .ics; a sandboxed
+  # phone app cannot, and the share sheet does NOT rescue it — iOS Calendar
+  # has no share extension, so sharing a .ics offers Copy and Save to Files
+  # and nothing else (tried, verified on device, dropped). This is the
+  # platform's own add-an-event intent instead. See lib/domain/ics.dart.
+  add_2_calendar: ^3.1.1
 
 dev_dependencies:
   flutter_test:

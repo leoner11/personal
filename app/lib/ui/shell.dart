@@ -7,6 +7,8 @@ import '../domain/config.dart';
 import '../domain/money_fmt.dart';
 import '../domain/auth.dart';
 import '../domain/sync.dart';
+import '../domain/sync_account.dart';
+import 'sync_join_dialog.dart';
 import 'account_dialog.dart';
 import 'platform.dart';
 import '../theme/tokens.dart';
@@ -293,12 +295,37 @@ class _SyncLineState extends State<_SyncLine> {
     await AccountDialog.show(context);
   }
 
+  /// True while the combine-or-replace dialog is up. Sync runs on every auth
+  /// change, so without this a second trigger would stack a second dialog.
+  bool _asking = false;
+
   Future<void> _run() async {
     final token = _auth?.token;
     if (token == null) return;
-    final engine =
-        SyncEngine(widget.db, baseUrl: kSyncBaseUrl, token: token);
+    final engine = SyncEngine(widget.db,
+        baseUrl: kSyncBaseUrl, token: token, account: _auth?.username ?? '');
     final at = await engine.run();
+
+    // ⚠ This device and the account both hold data. Nothing has synced; ask.
+    final join = engine.pendingJoin;
+    if (join != null) {
+      if (_asking || !mounted) return;
+      setState(() {
+        _label = 'Choose how to sync';
+        _stale = true;
+      });
+      _asking = true;
+      final choice = await SyncJoinDialog.show(context, join);
+      _asking = false;
+      if (choice == null || !mounted) return;
+      await completeJoin(widget.db, engine, choice,
+          backupPath: choice == JoinChoice.useAccount
+              ? await replaceBackupPath()
+              : null);
+      if (mounted) await _run(); // refresh the label from a settled state
+      return;
+    }
+
     // ⚠ A 401 is not a transient failure to retry forever. The token was
     // revoked or the account changed, and only signing in again fixes it —
     // so drop it rather than sitting on "Syncing…" against a server that

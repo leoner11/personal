@@ -8,7 +8,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from core.auth import hash_token
-from core.models import AuthToken, Person
+from core.models import AuthToken, OccasionTag, Person
 
 SECRET = "deploy-time-secret"
 
@@ -321,3 +321,188 @@ class TaskSyncTests(TestCase):
         rows = json.loads(
             self.client.get("/sync", headers=self.auth).content)["tables"]["tasks"]
         self.assertEqual([r["done_at"] for r in rows], ["2026-09-14T03:00:00+00:00"])
+
+
+class OccasionTagSyncTests(TestCase):
+    """The tag vocabulary rides the same sync as every other table.
+
+    ⚠ IT HAS TO. The tags are what a person's occasion_tags, an occasion's tag
+    and a money row's occasion_tag all point AT, by slug. A vocabulary that
+    stayed on one device would leave the other showing raw slugs it cannot
+    resolve, on chips it cannot offer — the person would be tagged with
+    something the Mac has no way to display or untick."""
+
+    def setUp(self):
+        cache.clear()
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            content_type="application/json",
+        )
+        self.auth = {"authorization": f"Bearer {body(r)['token']}"}
+
+    def push(self, rows):
+        return self.client.post(
+            "/sync",
+            data=json.dumps({"tables": {"occasion_tags": rows}}),
+            content_type="application/json",
+            headers=self.auth,
+        )
+
+    def pull(self):
+        return json.loads(
+            self.client.get("/sync", headers=self.auth).content
+        )["tables"]["occasion_tags"]
+
+    def test_a_tag_round_trips_with_everything_the_chip_needs(self):
+        self.push([{
+            "id": "tag-1", "slug": "hanukkah", "label": "Hanukkah",
+            "hint": "Jewish contacts", "greeting": "Happy Hanukkah!",
+            "sort_order": 9, "built_in": False,
+        }])
+        rows = self.pull()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["slug"], "hanukkah")
+        self.assertEqual(rows[0]["label"], "Hanukkah")
+        self.assertEqual(rows[0]["greeting"], "Happy Hanukkah!")
+        self.assertEqual(rows[0]["sort_order"], 9)
+        self.assertFalse(rows[0]["built_in"])
+
+    def test_a_rename_reaches_the_other_device_without_moving_the_slug(self):
+        # ⚠ The slug is the join key. If a rename changed it, every person
+        # already carrying the tag would detach silently.
+        for label in ("Lebaran / Aidilfitri", "Raya"):
+            self.push([{
+                "id": "tag-2", "slug": "lebaran", "label": label,
+                "built_in": True, "sort_order": 0,
+            }])
+        rows = self.pull()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["label"], "Raya")
+        self.assertEqual(rows[0]["slug"], "lebaran")
+
+    def test_a_deleted_tag_syncs_as_deleted_rather_than_vanishing(self):
+        # A hard delete would leave nothing to tell the other device it is
+        # gone, and the tag would sync straight back on its next push.
+        self.push([{"id": "tag-3", "slug": "guoqing", "label": "National Day"}])
+        self.push([{
+            "id": "tag-3", "slug": "guoqing", "label": "National Day",
+            "deleted_at": "2026-09-17T02:00:00Z",
+        }])
+        rows = self.pull()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["deleted_at"], "2026-09-17T02:00:00+00:00")
+
+    def test_the_two_accounts_can_hold_the_same_seeded_tag_id(self):
+        # Seeded tag ids are a v5 hash of the slug, so they are identical on
+        # every device AND across accounts. Uniqueness is scoped to the owner;
+        # globally unique would make the second user's vocabulary collide with
+        # the first's and vanish.
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": "sri", "password": "a-long-passphrase-2"}),
+            content_type="application/json",
+        )
+        other = {"authorization": f"Bearer {body(r)['token']}"}
+        row = [{"id": "seeded-cny", "slug": "cny", "label": "春节"}]
+
+        self.push(row)
+        self.client.post(
+            "/sync",
+            data=json.dumps({"tables": {"occasion_tags": row}}),
+            content_type="application/json",
+            headers=other,
+        )
+        self.assertEqual(len(self.pull()), 1)
+        self.assertEqual(OccasionTag.objects.filter(client_id="seeded-cny").count(), 2)
+
+
+class AccountDeletionTests(TestCase):
+    """In-app account deletion (App Store 5.1.1(v), Google Play).
+
+    ⚠ The only irreversible thing the API does, so these pin that it takes the
+    RIGHT account, ALL of it, and nothing else — and that a borrowed phone with
+    a live token cannot do it without the password."""
+
+    def setUp(self):
+        cache.clear()
+        self.auth = self.register("leonard", "a-long-passphrase-1")
+        self.other = self.register("sri", "a-long-passphrase-2")
+        for who, name in ((self.auth, "Pak Andi"), (self.other, "Bu Ratna")):
+            self.client.post(
+                "/sync",
+                data=json.dumps({"tables": {
+                    "people": [{"id": f"p-{name}", "name": name}],
+                    "occasion_tags": [{"id": "seeded-cny", "slug": "cny", "label": "春节"}],
+                }}),
+                content_type="application/json",
+                headers=who,
+            )
+
+    def register(self, username, password):
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": username, "password": password}),
+            content_type="application/json",
+        )
+        return {"authorization": f"Bearer {body(r)['token']}"}
+
+    def delete(self, headers, password):
+        return self.client.post(
+            "/auth/delete",
+            data=json.dumps({"password": password}),
+            content_type="application/json",
+            headers=headers,
+        )
+
+    def test_it_needs_a_valid_token(self):
+        self.assertEqual(self.delete({}, "a-long-passphrase-1").status_code, 401)
+        self.assertTrue(User.objects.filter(username="leonard").exists())
+
+    def test_a_token_without_the_password_deletes_nothing(self):
+        # ⚠ The unlocked-phone-on-a-table case.
+        r = self.delete(self.auth, "not-my-password")
+        self.assertEqual(r.status_code, 403, "403, so the client does not sign out")
+        self.assertTrue(User.objects.filter(username="leonard").exists())
+        self.assertEqual(Person.objects.filter(owner__username="leonard").count(), 1)
+
+    def test_the_password_check_is_rate_limited(self):
+        for _ in range(10):
+            self.delete(self.auth, "guess")
+        self.assertEqual(self.delete(self.auth, "a-long-passphrase-1").status_code, 429)
+        self.assertTrue(User.objects.filter(username="leonard").exists())
+
+    def test_it_removes_the_account_everything_it_synced_and_every_device(self):
+        second_device = self.client.post(
+            "/auth/login",
+            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            content_type="application/json",
+        )
+        mac = {"authorization": f"Bearer {body(second_device)['token']}"}
+
+        self.assertEqual(self.delete(self.auth, "a-long-passphrase-1").status_code, 200)
+
+        self.assertFalse(User.objects.filter(username="leonard").exists())
+        # ⚠ Absolute counts. Filtering on owner__username="leonard" after the
+        # user is gone matches nothing whether or not the rows survived.
+        self.assertEqual(list(Person.objects.values_list("name", flat=True)), ["Bu Ratna"])
+        self.assertEqual(OccasionTag.objects.count(), 1)
+        self.assertEqual(AuthToken.objects.count(), 1, "only sri's token remains")
+        # The other device finds out on its next sync, as a 401.
+        self.assertEqual(self.client.get("/sync", headers=mac).status_code, 401)
+
+    def test_it_touches_no_other_account(self):
+        self.delete(self.auth, "a-long-passphrase-1")
+        rows = json.loads(self.client.get("/sync", headers=self.other).content)["tables"]
+        self.assertEqual([p["name"] for p in rows["people"]], ["Bu Ratna"])
+        # Same seeded id, different owner — must survive.
+        self.assertEqual(len(rows["occasion_tags"]), 1)
+
+    def test_the_username_can_start_again_empty(self):
+        self.delete(self.auth, "a-long-passphrase-1")
+        fresh = self.register("leonard", "a-new-long-passphrase")
+        rows = json.loads(self.client.get("/sync", headers=fresh).content)["tables"]
+        self.assertEqual(rows["people"], [])
+
+    def test_only_post(self):
+        self.assertEqual(self.client.get("/auth/delete", headers=self.auth).status_code, 405)

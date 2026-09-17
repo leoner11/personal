@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:add_2_calendar/add_2_calendar.dart' as add2;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -66,9 +67,51 @@ String _esc(String s) => s
     .replaceAll(';', '\\;')
     .replaceAll('\n', '\\n');
 
-/// Writes the file and opens it, which on macOS hands it to Calendar.app.
-/// Returns the path, or null if it could not be opened.
+/// Puts the meeting in the phone's or the computer's real calendar.
+///
+/// ⚠ TWO ROUTES, AND THEY ARE NOT THE SAME MECHANISM — because the platforms
+/// are not. Desktop writes a .ics and opens a `file://` URL, which macOS
+/// routes to Calendar.app. That route is a dead end on a phone:
+///
+///   * `file://` means nothing to another sandboxed app on iOS/Android; and
+///   * **the share sheet does not solve it either.** Handing iOS a .ics offers
+///     Copy and Save to Files and nothing else — Calendar.app registers no
+///     share extension, so the file goes to Files and the user is left to find
+///     and tap it. Verified on the simulator; that approach was built, tried,
+///     and dropped.
+///
+/// So mobile uses the platform's own "add an event" intent instead:
+/// `EKEventEditViewController` on iOS, `Intent.ACTION_INSERT` on Android. Both
+/// open the calendar's own pre-filled new-event screen and let the user
+/// confirm — no silent write, and on Android no permission at all.
+///
+/// ⚠ STILL A SNAPSHOT, NOT A SYNC, on every platform. The event is a copy
+/// taken now. Edit the meeting here afterwards and the calendar's copy does
+/// not follow — it has no idea this app exists. Anything in the UI that
+/// implies otherwise is a lie.
+///
+/// Returns a path on desktop, the empty string when a phone accepted the
+/// event, or null if the platform refused it.
 Future<String?> openInCalendar(Meeting m, {String? personName}) async {
+  if (Platform.isIOS || Platform.isAndroid) {
+    final ok = await add2.Add2Calendar.addEvent2Cal(add2.Event(
+      title: m.title,
+      description: [
+        if ((personName ?? '').isNotEmpty) 'With $personName',
+        if ((m.notes ?? '').isNotEmpty) m.notes!,
+      ].join('\n'),
+      location: m.location ?? '',
+      startDate: m.startsAt,
+      endDate: m.startsAt.add(Duration(minutes: m.durationMinutes)),
+      // ⚠ NO reminder set here, deliberately — the calendar applies whatever
+      // default the user already chose for it. This app's own notification
+      // (a day before, then an hour before) is separate and keeps firing
+      // either way; forcing an alert as well would hard-code a second one
+      // nobody asked for. The edit screen is right there if they want it.
+    ));
+    return ok ? '' : null;
+  }
+
   final dir = await getApplicationDocumentsDirectory();
   // ⚠ Named by id, so exporting the same meeting twice overwrites rather than
   // filling the documents directory with near-identical files.

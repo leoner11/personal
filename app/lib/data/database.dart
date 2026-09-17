@@ -86,6 +86,57 @@ class Occasions extends Table {
   /// OccasionTag.name — links a date to the people carrying that tag.
   TextColumn get tag => text()();
   TextColumn get country => text().nullable()();
+  /// The occasion's own greeting (Phase 3 of the design doc). An occasion
+  /// tagged creatively (Thanksgiving under the New Year audience) must not
+  /// inherit the tag festival's template; null/empty = use the template.
+  TextColumn get greeting => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// D3b — the occasion TAG vocabulary, as data rather than a Dart enum.
+///
+/// ⚠ WHY THIS IS A TABLE. The nine tags in [OccasionTag] cover Indonesian,
+/// Malaysian and Chinese contacts because that is who Leonard knows. Shipped
+/// to anyone else the list is not merely incomplete, it is unfixable from
+/// inside the app: no chip means no way to tag, and no way to tag means the
+/// festival never fires. The vocabulary has to be the user's, not the build's.
+///
+/// ⚠ [slug] IS THE JOIN KEY, NOT [id]. People carry a comma-joined list of
+/// slugs, occasions carry one, money carries one — all as plain strings, all
+/// written long before this table existed. The nine built-ins therefore keep
+/// their exact enum names as slugs ('cny', 'midAutumn', …) so that not one
+/// existing row has to migrate.
+///
+/// ⚠ [id] is seededId('tag:`<slug>`'), the same trick occasions use: two
+/// devices that independently create 'hanukkah' derive the SAME v5 uuid
+/// offline, and
+/// last-write-wins collapses them into one row instead of keeping both and
+/// drawing the chip twice.
+@DataClassName('OccasionTagRow')
+class OccasionTags extends Table {
+  TextColumn get id => text()();
+  /// The stable key written into people/occasions/money. Never changes once
+  /// minted — renaming a tag edits [label] only, so tagged people follow.
+  TextColumn get slug => text()();
+  TextColumn get label => text()();
+  /// The audience note under the chip ('CN + MY/ID Chinese'). Optional: a
+  /// user-made tag usually needs no explanation to the person who made it.
+  TextColumn get hint => text().nullable()();
+  /// This tag's default greeting. Sits between the occasion's own greeting and
+  /// the built-in [kGreetings] templates — see the resolution order in
+  /// occasion_run_screen.dart. Null/empty = fall through.
+  TextColumn get greeting => text().nullable()();
+  /// Chip order. Built-ins seed 0..8; user tags land after.
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  /// Seeded from [OccasionTag] rather than typed by the user. Controls two
+  /// things only: whether [kGreetings] applies, and whether the occasion
+  /// backfill may add dates for it. NOT a permission — built-ins rename and
+  /// delete exactly like any other tag.
+  BoolColumn get builtIn => boolean().withDefault(const Constant(false))();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get deletedAt => dateTime().nullable()();
 
@@ -238,15 +289,50 @@ class Tasks extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Sync bookkeeping: one row per synced row, kept OUT of the data tables.
+///
+/// ⚠ WHY A SEPARATE TABLE. Sync used to upload every row of every table on
+/// every run, and the server stamps whatever arrives as newest. So a device
+/// holding a stale copy — the Mac, opened after an edit on the phone — pushed
+/// that copy and silently overwrote the edit. Fixing it needs "has this row
+/// changed here since the server last saw it", per row. Putting that on the
+/// nine data tables would change every data class and every place that builds
+/// one; here it touches nothing but sync.
+///
+/// [dirty] is a COUNTER, not a flag. SQLite triggers (installed in
+/// [AppDatabase.migration]'s beforeOpen) add 1 on every insert or update of a
+/// synced row, so no write site anywhere in the app can forget to mark a
+/// change. Push remembers the value it sent and clears it only if it is still
+/// that value — an edit made while the upload was in flight bumps it, the
+/// clear misses, and the edit goes up next time instead of being lost.
+///
+/// [serverStamp] is the server's updated_at for the version this device holds,
+/// so a pull can skip rows it already has.
+@DataClassName('SyncStateRow')
+class SyncStates extends Table {
+  @override
+  String get tableName => 'sync_state';
+
+  /// The data table's SQL name, which is also its name on the wire.
+  TextColumn get tbl => text()();
+  TextColumn get rowId => text()();
+  IntColumn get dirty => integer().withDefault(const Constant(1))();
+  TextColumn get serverStamp => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {tbl, rowId};
+}
+
 @DriftDatabase(tables: [
-  People, Occasions, Engagements, Money, Notes, Touches, Meetings, Tasks
+  People, Occasions, OccasionTags, Engagements, Money, Notes, Touches,
+  Meetings, Tasks, SyncStates
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'personal_crm'));
-  AppDatabase.forTesting(QueryExecutor e) : super(e);
+  AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -284,8 +370,72 @@ class AppDatabase extends _$AppDatabase {
           if (from < 6) {
             await m.createTable(tasks);
           }
+          // v7 adds the per-occasion greeting (Phase 3). addColumn only —
+          // existing rows read as null, which means "use the tag template".
+          if (from < 7) {
+            await m.addColumn(occasions, occasions.greeting);
+          }
+          // v8 turns the tag vocabulary into data. ⚠ createTable only, and the
+          // built-ins seed with their enum names as slugs, so every existing
+          // person/occasion/money row keeps pointing at exactly what it always
+          // did. seedBuiltInTags() fills it — see notifications.dart, which
+          // also backfills installs that upgrade rather than install fresh.
+          if (from < 8) {
+            await m.createTable(occasionTags);
+          }
+          // v9 adds per-row sync bookkeeping. Every existing row starts DIRTY,
+          // so the first sync after upgrading uploads everything once — the
+          // same as every sync did before — and only changes after that.
+          // (No shipped build has sync switched on yet, so that one full push
+          // cannot clobber anything.)
+          if (from < 9) {
+            await m.createTable(syncStates);
+            for (final t in syncedTables) {
+              final name = t.actualTableName;
+              // `WHERE true` is required: SQLite cannot otherwise tell an
+              // upsert's ON CONFLICT apart from a join clause after SELECT.
+              await customStatement(
+                  "INSERT INTO sync_state (tbl, row_id, dirty) "
+                  "SELECT '$name', id, 1 FROM $name WHERE true "
+                  "ON CONFLICT (tbl, row_id) DO NOTHING");
+            }
+          }
         },
+        // ⚠ EVERY open, not only on create or upgrade, and idempotent. The
+        // triggers are what make change-tracking impossible to forget, so they
+        // must exist no matter which path built this file — including the v3
+        // rebuild above, which drops tables and their triggers with them.
+        beforeOpen: (_) => installSyncTriggers(),
       );
+
+  /// The tables that sync, in dependency-free order. The single list both the
+  /// triggers and the sync engine are built from, so a table added to one
+  /// cannot be missing from the other.
+  List<TableInfo<Table, Object?>> get syncedTables => [
+        people, occasions, occasionTags, engagements, money, notes, touches,
+        meetings, tasks,
+      ];
+
+  Future<void> installSyncTriggers() async {
+    for (final t in syncedTables) {
+      final name = t.actualTableName;
+      for (final event in ['INSERT', 'UPDATE']) {
+        // ⚠ No condition, deliberately. Rows the sync engine PULLS fire this
+        // too; the engine marks each one clean again straight after writing it
+        // (see markPulled). An earlier draft also switched tracking off during
+        // pulls with a guard table — mutation testing showed it changed
+        // nothing, so it went: one fewer thing that could get stuck.
+        await customStatement('''
+          CREATE TRIGGER IF NOT EXISTS sync_mark_${name}_${event.toLowerCase()}
+          AFTER $event ON $name
+          BEGIN
+            INSERT INTO sync_state (tbl, row_id, dirty)
+            VALUES ('$name', NEW.id, 1)
+            ON CONFLICT (tbl, row_id) DO UPDATE SET dirty = dirty + 1;
+          END''');
+      }
+    }
+  }
 
   /// Everything alive, newest contact first.
   Stream<List<Person>> watchPeople() => (select(people)
@@ -357,6 +507,81 @@ extension Queries on AppDatabase {
         ..where((o) => o.deletedAt.isNull())
         ..orderBy([(o) => OrderingTerm.asc(o.date)]))
       .watch();
+
+  // ── Occasion tags ───────────────────────────────────────────────────────
+
+  Stream<List<OccasionTagRow>> watchOccasionTags() => (select(occasionTags)
+        ..where((t) => t.deletedAt.isNull())
+        ..orderBy([
+          (t) => OrderingTerm.asc(t.sortOrder),
+          (t) => OrderingTerm.asc(t.label),
+        ]))
+      .watch();
+
+  Future<List<OccasionTagRow>> allOccasionTags() => (select(occasionTags)
+        ..where((t) => t.deletedAt.isNull())
+        ..orderBy([
+          (t) => OrderingTerm.asc(t.sortOrder),
+          (t) => OrderingTerm.asc(t.label),
+        ]))
+      .get();
+
+  /// ⚠ INCLUDES SOFT-DELETED ROWS. The seed backfill needs them: a slug the
+  /// user deleted is still taken, and resurrecting it would undo their delete
+  /// on the next launch.
+  Future<List<OccasionTagRow>> allOccasionTagsIncludingDeleted() =>
+      select(occasionTags).get();
+
+  Future<void> upsertOccasionTag(OccasionTagsCompanion row) =>
+      into(occasionTags).insertOnConflictUpdate(row);
+
+  Future<void> updateOccasionTag(String id, OccasionTagsCompanion patch) =>
+      (update(occasionTags)..where((t) => t.id.equals(id)))
+          .write(patch.copyWith(updatedAt: Value(DateTime.now())));
+
+  /// Everything the delete confirm has to be able to name before it asks.
+  Future<(int people, int occasions)> occasionTagUsage(String slug) async {
+    final tagged = (await allPeople())
+        .where((p) => p.occasionTags.contains(slug))
+        .length;
+    final dated =
+        (await allOccasions()).where((o) => o.tag == slug).length;
+    return (tagged, dated);
+  }
+
+  /// Soft-deletes a tag AND everything pointing at it, in one transaction.
+  ///
+  /// ⚠ THE CASCADE IS THE POINT. Deleting the row alone would take the chip
+  /// out of every sheet while its occasions kept their dates and kept firing
+  /// notifications — reminders for a tag the user believes they deleted, with
+  /// nowhere in the UI left to explain them. Money rows keep their
+  /// occasion_tag string: they are a record of what was spent, and history is
+  /// not rewritten by a vocabulary change.
+  Future<void> deleteOccasionTag(String id) async {
+    final now = DateTime.now();
+    await transaction(() async {
+      final row = await (select(occasionTags)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+      if (row == null) return;
+
+      await (update(occasionTags)..where((t) => t.id.equals(id))).write(
+          OccasionTagsCompanion(
+              deletedAt: Value(now), updatedAt: Value(now)));
+
+      await (update(occasions)
+            ..where((o) => o.tag.equals(row.slug) & o.deletedAt.isNull()))
+          .write(OccasionsCompanion(
+              deletedAt: Value(now), updatedAt: Value(now)));
+
+      for (final p in await allPeople()) {
+        if (!p.occasionTags.contains(row.slug)) continue;
+        final kept = p.occasionTags.where((t) => t != row.slug).toList();
+        await (update(people)..where((t) => t.id.equals(p.id))).write(
+            PeopleCompanion(
+                occasionTags: Value(kept), updatedAt: Value(now)));
+      }
+    });
+  }
 
   /// The next occasion for each tag, used by Today and the scheduler.
   Future<List<Occasion>> upcomingOccasions({int withinDays = 400}) async {
@@ -609,4 +834,112 @@ class TimelineEntry {
   final String text;
   /// 'in' | 'out' for money rows, null otherwise.
   final String? direction;
+}
+
+/// What the sync engine needs from the database, and nothing else does.
+extension SyncQueries on AppDatabase {
+  /// id → change counter, for rows changed here since the server last saw them.
+  Future<Map<String, int>> dirtyRows(String tbl) async {
+    final rows = await (select(syncStates)
+          ..where((s) => s.tbl.equals(tbl) & s.dirty.isBiggerThanValue(0)))
+        .get();
+    return {for (final r in rows) r.rowId: r.dirty};
+  }
+
+  Future<Map<String, SyncStateRow>> syncStateFor(
+      String tbl, List<String> ids) async {
+    final out = <String, SyncStateRow>{};
+    // Chunked: SQLite caps bound parameters, and a first sync can carry
+    // every row a device has ever held.
+    for (var i = 0; i < ids.length; i += 500) {
+      final chunk = ids.sublist(i, i + 500 > ids.length ? ids.length : i + 500);
+      final rows = await (select(syncStates)
+            ..where((s) => s.tbl.equals(tbl) & s.rowId.isIn(chunk)))
+          .get();
+      for (final r in rows) {
+        out[r.rowId] = r;
+      }
+    }
+    return out;
+  }
+
+  /// Marks a pushed row clean — ONLY if nothing changed it during the upload.
+  /// Returns whether it was cleared.
+  Future<bool> ackPushed(
+      String tbl, String rowId, int sentDirty, String serverStamp) async {
+    final n = await (update(syncStates)
+          ..where((s) =>
+              s.tbl.equals(tbl) &
+              s.rowId.equals(rowId) &
+              s.dirty.equals(sentDirty)))
+        .write(SyncStatesCompanion(
+            dirty: const Value(0), serverStamp: Value(serverStamp)));
+    return n > 0;
+  }
+
+  /// Records that this device now holds the server's version [serverStamp],
+  /// and that the row is CLEAN.
+  ///
+  /// ⚠ CALL IT AFTER writing the pulled row, never before. Writing the row
+  /// fires the change trigger and marks it dirty; this is what undoes that.
+  /// Reversed, every pulled row would stay dirty and be pushed straight back —
+  /// restamped, pulled by the other device, pushed back again, forever.
+  Future<void> markPulled(String tbl, String rowId, String serverStamp) =>
+      into(syncStates).insertOnConflictUpdate(SyncStatesCompanion.insert(
+        tbl: tbl,
+        rowId: rowId,
+        dirty: const Value(0),
+        serverStamp: Value(serverStamp),
+      ));
+
+  /// Queues EVERY row on this device for upload, as if none had ever synced.
+  ///
+  /// Used when this device's data joins a different account ("Combine both").
+  /// Stamps are cleared too: they describe versions on the OLD account's
+  /// server rows, and a stale stamp matching by coincidence would make a pull
+  /// skip a row it must take.
+  Future<void> markEverythingForUpload() => transaction(() async {
+        for (final t in syncedTables) {
+          final name = t.actualTableName;
+          await customStatement(
+              "INSERT INTO sync_state (tbl, row_id, dirty) "
+              "SELECT '$name', id, 0 FROM $name WHERE true "
+              "ON CONFLICT (tbl, row_id) DO NOTHING");
+        }
+        await customStatement(
+            'UPDATE sync_state SET dirty = dirty + 1, server_stamp = NULL');
+      });
+
+  /// Removes every synced row from THIS DEVICE, so an account's data can
+  /// replace it ("Use the account's data").
+  ///
+  /// ⚠ HARD deletes, deliberately — the one place in this app — AND the
+  /// sync_state wipe, together. Soft deletes are updates: the triggers would
+  /// queue every row as a tombstone for the next sync to upload INTO the
+  /// account being joined, deleting that account's copies of any shared id
+  /// (every seeded festival and tag). DELETE fires no trigger, and clearing
+  /// sync_state drops any stamps from the old account.
+  ///
+  /// ⚠ [backupPath] first. This removes real contacts from the device; the
+  /// copy is the way back if the choice was a mistake. `VACUUM INTO` writes a
+  /// consistent single-file snapshot and cannot run inside a transaction, so
+  /// it goes before one.
+  Future<void> wipeSyncedData({String? backupPath}) async {
+    if (backupPath != null) {
+      await customStatement('VACUUM INTO ?', [backupPath]);
+    }
+    await transaction(() async {
+      for (final t in syncedTables) {
+        await customStatement('DELETE FROM ${t.actualTableName}');
+      }
+      await customStatement('DELETE FROM sync_state');
+    });
+  }
+
+  /// Tracking for a row that no longer exists (hard-deleted by a migration or
+  /// a test). Nothing to upload, so stop trying.
+  Future<void> forgetSyncState(String tbl, String rowId) =>
+      (delete(syncStates)
+            ..where((s) => s.tbl.equals(tbl) & s.rowId.equals(rowId)))
+          .go();
 }

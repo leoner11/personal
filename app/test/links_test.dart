@@ -2,11 +2,25 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_crm/data/database.dart';
+import 'package:personal_crm/domain/notifications.dart';
+import 'package:personal_crm/domain/tag_vocab.dart';
 
 void main() {
   late AppDatabase db;
-  setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
-  tearDown(() => db.close());
+  setUp(() async {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    // ⚠ The tag vocabulary is a TABLE now, and chips render from it. main()
+    // seeds it before the first frame; a test database starts empty, so
+    // without this every occasion chip is simply absent. refresh() rather
+    // than bind() — a drift stream subscription outlives the test and trips
+    // the pending-timer assertion.
+    await seedBuiltInTags(db);
+    await TagVocab.refresh(db);
+  });
+  tearDown(() async {
+    await TagVocab.reset();
+    await db.close();
+  });
 
   Future<String> person(String name) async {
     final id = newId();

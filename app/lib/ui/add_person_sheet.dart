@@ -2,9 +2,10 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../data/database.dart';
-import '../domain/occasions.dart';
+import '../domain/tag_vocab.dart';
 import '../theme/tokens.dart';
 import 'platform.dart';
+import 'widgets/occasion_tag_dialogs.dart';
 import 'widgets/primitives.dart';
 
 /// A1 — Add Person, and editing one. ⚠ If logging a person takes more than ~10
@@ -21,13 +22,14 @@ class AddPersonSheet extends StatefulWidget {
   const AddPersonSheet(
       {super.key, required this.db, this.presetTag, this.existing});
   final AppDatabase db;
-  final OccasionTag? presetTag;
+  /// A tag SLUG, preselected when adding from an occasion run.
+  final String? presetTag;
 
   /// Non-null puts the sheet in edit mode.
   final Person? existing;
 
   static Future<bool?> show(BuildContext context, AppDatabase db,
-          {OccasionTag? presetTag, Person? existing}) =>
+          {String? presetTag, Person? existing}) =>
       showDialog<bool>(
         context: context,
         builder: (_) =>
@@ -47,7 +49,8 @@ class _AddPersonSheetState extends State<AddPersonSheet> {
   final _notes = TextEditingController();
   final _pingNote = TextEditingController();
 
-  final _tags = <OccasionTag>{};
+  /// Slugs, not enum values — the vocabulary is a table now.
+  final _tags = <String>{};
   DateTime? _pingDate;
   String? _pingLabel;
 
@@ -66,12 +69,13 @@ class _AddPersonSheetState extends State<AddPersonSheet> {
       _notes.text = e.notes ?? '';
       _pingNote.text = e.pingNote ?? '';
       _pingDate = e.pingDate;
-      for (final id in e.occasionTags) {
-        final tag = OccasionTag.fromId(id);
-        // ⚠ Skip rather than crash on a tag this build no longer knows. A row
-        // synced from a newer client must not make its person uneditable.
-        if (tag != null) _tags.add(tag);
-      }
+      // ⚠ EVERY slug is kept, including ones with no row in the vocabulary.
+      // Skipping them here while line ~125 writes _tags back over the person
+      // silently DELETED them — harmless while the tag list was a compiled-in
+      // enum, routine data loss now that tags are user data and travel by
+      // sync. Unknown slugs are drawn as chips labelled with the raw slug so
+      // they can be seen and toggled, and are otherwise written back untouched.
+      _tags.addAll(e.occasionTags);
     }
     if (widget.presetTag != null) _tags.add(widget.presetTag!);
     _name.addListener(() => setState(() {}));
@@ -122,7 +126,7 @@ class _AddPersonSheetState extends State<AddPersonSheet> {
           // ⚠ metWhen is NOT touched. It records when you met, not when you
           // last edited the row.
           notes: Value(_notes.text.trim().isEmpty ? null : _notes.text.trim()),
-          occasionTags: Value(_tags.map((t) => t.name).toList()),
+          occasionTags: Value(_tags.toList()),
           pingDate: Value(_pingDate),
           pingNote:
               Value(_pingNote.text.trim().isEmpty ? null : _pingNote.text.trim()),
@@ -143,7 +147,7 @@ class _AddPersonSheetState extends State<AddPersonSheet> {
           Value(_metWhere.text.trim().isEmpty ? null : _metWhere.text.trim()),
       metWhen: Value(DateTime.now()),
       notes: Value(_notes.text.trim().isEmpty ? null : _notes.text.trim()),
-      occasionTags: Value(_tags.map((t) => t.name).toList()),
+      occasionTags: Value(_tags.toList()),
       pingDate: Value(_pingDate),
       pingNote:
           Value(_pingNote.text.trim().isEmpty ? null : _pingNote.text.trim()),
@@ -227,19 +231,44 @@ class _AddPersonSheetState extends State<AddPersonSheet> {
                       'If unsure, tag only New Year. Never guess religion.',
                       style: T.secondary.copyWith(color: t.textMuted)),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final tag in OccasionTag.values)
-                        TagChip(
-                          label: tag.label,
-                          selected: _tags.contains(tag),
-                          onTap: () => setState(() => _tags.contains(tag)
-                              ? _tags.remove(tag)
-                              : _tags.add(tag)),
-                        ),
-                    ],
+                  ValueListenableBuilder<List<OccasionTagRow>>(
+                    valueListenable: TagVocab.all,
+                    builder: (context, _, _) {
+                      final vocab = TagVocab.live;
+                      final known = {for (final v in vocab) v.slug};
+                      final orphans =
+                          _tags.where((s) => !known.contains(s)).toList()
+                            ..sort();
+                      return Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final slug in [
+                            ...vocab.map((v) => v.slug),
+                            ...orphans
+                          ])
+                            TagChip(
+                              label: TagVocab.labelFor(slug),
+                              selected: _tags.contains(slug),
+                              onTap: () => setState(() => _tags.contains(slug)
+                                  ? _tags.remove(slug)
+                                  : _tags.add(slug)),
+                            ),
+                          // Desktop parity with the phone's '+' chip: the
+                          // vocabulary has to be extensible from wherever you
+                          // are tagging, not only from a settings screen.
+                          TagChip(
+                            label: '+ New tag',
+                            selected: false,
+                            onTap: () async {
+                              final slug =
+                                  await NewTagDialog.show(context, widget.db);
+                              if (slug != null) setState(() => _tags.add(slug));
+                            },
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 16),

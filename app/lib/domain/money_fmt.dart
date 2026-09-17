@@ -52,11 +52,15 @@ String fmtClock(DateTime d) =>
 /// Date plus time, for meetings — the only rows in this app that have one.
 String fmtDateTime(DateTime d) => '${fmtDate(d)} ${fmtClock(d)}';
 
-const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+/// Month names, shared by [fmtDate] (abbreviated) and the phone ledger's
+/// month group headers (full). One source: a second list drifts.
+const kMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const kMonthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 String fmtDate(DateTime d) {
   final now = DateTime.now();
-  final base = '${d.day} ${_months[d.month - 1]}';
+  final base = '${d.day} ${kMonths[d.month - 1]}';
   return d.year == now.year ? base : '$base ${d.year}';
 }
 

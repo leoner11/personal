@@ -4,6 +4,8 @@ import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../theme/tokens.dart';
 import '../screens/projects_screen.dart' show kTypes;
+import '../widgets/app_icon.dart';
+import 'person_detail_screen.dart';
 import 'phone_pickers.dart';
 import 'phone_primitives.dart';
 
@@ -15,6 +17,11 @@ import 'phone_primitives.dart';
 /// MouseRegion and tints on hover. A phone has no hover, so the tint is dead
 /// code and the row would look inert. The chevron replaces it — a permanent,
 /// visible signal that the row does something.
+///
+/// v2: the edit sheet gains the `View person` tap-through and the soft
+/// Delete. Delete lives in the edit sheet's actions row, not on a swipe: the
+/// list is a read surface and deleting a project is rare — §3.2 reserves
+/// swipe for frequent actions.
 class PhoneProjectsScreen extends StatefulWidget {
   const PhoneProjectsScreen({super.key, required this.db});
   final AppDatabase db;
@@ -29,70 +36,64 @@ class _PhoneProjectsScreenState extends State<PhoneProjectsScreen> {
 
   void _reloadPeople() => setState(() => _people = widget.db.peopleById());
 
+  Future<void> _open(WidgetBuilder builder) async {
+    await PhoneSheet.show<void>(context, builder);
+    if (mounted) _reloadPeople();
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = widget.db;
     final t = AppTokens.of(context);
-    return StreamBuilder<List<Engagement>>(
-      stream: db.watchEngagements(),
-      builder: (context, snap) {
-        final rows = snap.data ?? const <Engagement>[];
-        return FutureBuilder<Map<String, Person>>(
-          future: _people,
-          builder: (context, peopleSnap) {
-            final byId = peopleSnap.data ?? const <String, Person>{};
-            return PhoneBody(
-              title: 'Projects',
-              trailing: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () async {
-                  await PhoneSheet.show<void>(
-                    context,
-                    (_) => PhoneProjectSheet(db: db),
-                  );
-                  if (mounted) _reloadPeople();
-                },
-                child: SizedBox(
-                  width: PD.tapMin,
-                  height: PD.tapMin,
-                  child: Icon(Icons.add, size: 26, color: t.accent),
+    return PhoneScaffold(
+      title: 'Projects',
+      actions: [
+        PhonePressable(
+          onTap: () => _open((_) => PhoneProjectSheet(db: db)),
+          pressedScale: 0.9,
+          child: SizedBox(
+            width: PD.tapMin,
+            height: PD.tapMin,
+            child: Center(child: AppIcon(Ic.add, size: 26, color: t.accent)),
+          ),
+        ),
+      ],
+      child: StreamBuilder<List<Engagement>>(
+        stream: db.watchEngagements(),
+        builder: (context, snap) {
+          final rows = snap.data ?? const <Engagement>[];
+          return FutureBuilder<Map<String, Person>>(
+            future: _people,
+            builder: (context, peopleSnap) {
+              final byId = peopleSnap.data ?? const <String, Person>{};
+              if (rows.isEmpty) return const PhoneEmpty('Nothing here yet.');
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  PD.screenPad,
+                  0,
+                  PD.screenPad,
+                  PD.sectionGap,
                 ),
-              ),
-              child: rows.isEmpty
-                  ? const PhoneEmpty('Nothing here yet.')
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(
-                        PD.screenPad,
-                        0,
-                        PD.screenPad,
-                        PD.sectionGap,
-                      ),
-                      children: [
-                        for (final type in kTypes)
-                          if (rows.any((e) => e.type == type))
-                            PhoneSection(type, [
-                              for (final e in rows.where((e) => e.type == type))
-                                _ProjectRow(
-                                  engagement: e,
-                                  person: byId[e.counterpartyId],
-                                  onTap: () async {
-                                    await PhoneSheet.show<void>(
-                                      context,
-                                      (_) => PhoneProjectSheet(
-                                        db: db,
-                                        existing: e,
-                                      ),
-                                    );
-                                    if (mounted) _reloadPeople();
-                                  },
-                                ),
-                            ]),
-                      ],
-                    ),
-            );
-          },
-        );
-      },
+                children: [
+                  for (final type in kTypes)
+                    if (rows.any((e) => e.type == type))
+                      PhoneSection(type, [
+                        for (final e in rows.where((e) => e.type == type))
+                          _ProjectRow(
+                            engagement: e,
+                            person: byId[e.counterpartyId],
+                            onTap: () => _open(
+                              (_) => PhoneProjectSheet(db: db, existing: e),
+                            ),
+                          ),
+                      ]),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
@@ -115,10 +116,9 @@ class _ProjectRow extends StatelessWidget {
     // line beside the status, not hidden behind a tap.
     final meta = [
       if (person != null)
-        [
-          person!.name,
-          person!.company,
-        ].where((s) => s != null && s.isNotEmpty).join(' · '),
+        [person!.name, person!.company]
+            .where((s) => s != null && s.isNotEmpty)
+            .join(' · '),
       if ((e.status ?? '').isNotEmpty) e.status!,
     ].join('  —  ');
 
@@ -128,10 +128,13 @@ class _ProjectRow extends StatelessWidget {
       onTap: onTap,
       chevron: true,
       trailing: e.valueMinor == null
-          ? null
-          // ⚠ Plain tabular text, never a status tag. `status` is free text and
-          // the design system is explicit that it must not be dressed up as a
-          // state machine it is not.
+          // ⚠ `unknown`, never 0.00 — an empty value means "we haven't
+          // agreed a number", and ¥0.00 would claim the deal is worth
+          // nothing. The list must never say that.
+          ? Text('unknown', style: PT.secondary.copyWith(color: t.textMuted))
+          // ⚠ Plain tabular text, never a status tag. `status` is free text
+          // and the design system is explicit that it must not be dressed up
+          // as a state machine it is not.
           : Text(
               fmtMoney(e.valueMinor!, e.currency ?? 'CNY'),
               style: PT.mono.copyWith(color: t.textSecondary),
@@ -206,15 +209,28 @@ class _PhoneProjectSheetState extends State<PhoneProjectSheet> {
       title: editing ? 'Edit project' : 'Add project',
       actions: Row(
         children: [
-          Expanded(
-            child: PhoneBtn(
-              'Cancel',
-              variant: PhoneBtnVariant.ghost,
-              onPressed: () => Navigator.pop(context),
+          if (editing) ...[
+            Expanded(
+              flex: 1,
+              child: PhoneBtn(
+                'Delete',
+                variant: PhoneBtnVariant.danger,
+                onPressed: _confirmDelete,
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+          ] else
+            Expanded(
+              flex: 1,
+              child: PhoneBtn(
+                'Cancel',
+                variant: PhoneBtnVariant.ghost,
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
           const SizedBox(width: 8),
           Expanded(
+            flex: 2,
             child: PhoneBtn(
               'Save',
               variant: PhoneBtnVariant.primary,
@@ -226,11 +242,32 @@ class _PhoneProjectSheetState extends State<PhoneProjectSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ⚠ The tap-through is this row — one honest 44pt target. Tapping
+          // the counterparty inside the row's subtitle would break the floor.
+          // The linked project on a money row has no such row because no
+          // project detail screen exists to receive it; a person does.
+          if (editing && _person != null)
+            PhoneRow(
+              title: [_person!.name, _person!.company]
+                  .where((s) => s != null && s.isNotEmpty)
+                  .join(' · '),
+              minHeight: PD.listRow,
+              chevron: true,
+              onTap: () => Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PersonDetailScreen(
+                    db: widget.db,
+                    personId: widget.existing!.counterpartyId!,
+                  ),
+                ),
+              ),
+            ),
           PhoneField(
             label: 'Name',
             controller: _name,
             hint: 'NaraHome ERP',
             autofocus: !editing,
+            textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: PD.sectionGap),
           _Chips(
@@ -244,10 +281,9 @@ class _PhoneProjectSheetState extends State<PhoneProjectSheet> {
             label: 'Counterparty',
             value: _person == null
                 ? null
-                : [
-                    _person!.name,
-                    _person!.company,
-                  ].where((s) => s != null && s.isNotEmpty).join(' · '),
+                : [_person!.name, _person!.company]
+                      .where((s) => s != null && s.isNotEmpty)
+                      .join(' · '),
             onTap: () async {
               final p = await pickPerson(context, widget.db);
               if (p == null) return;
@@ -266,6 +302,7 @@ class _PhoneProjectSheetState extends State<PhoneProjectSheet> {
             label: 'Status',
             controller: _status,
             hint: 'waiting on their legal',
+            textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: PD.groupGap),
           PhoneField(
@@ -273,6 +310,7 @@ class _PhoneProjectSheetState extends State<PhoneProjectSheet> {
             controller: _value,
             hint: '250000',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: PD.groupGap),
           _Chips(
@@ -282,7 +320,11 @@ class _PhoneProjectSheetState extends State<PhoneProjectSheet> {
             onTap: (v) => setState(() => _cur = v),
           ),
           const SizedBox(height: PD.groupGap),
-          PhoneField(label: 'Notes', controller: _notes),
+          PhoneField(
+            label: 'Notes',
+            controller: _notes,
+            textInputAction: TextInputAction.done,
+          ),
         ],
       ),
     );
@@ -325,6 +367,19 @@ class _PhoneProjectSheetState extends State<PhoneProjectSheet> {
         ),
       );
     }
+    if (mounted) Navigator.pop(context);
+  }
+
+  /// Soft delete behind the house confirm — the desktop `DeleteAction`
+  /// grammar, which the phone's projects surface never grew until now.
+  Future<void> _confirmDelete() async {
+    final ok = await showPhoneConfirm(
+      context,
+      title: 'Delete "${widget.existing!.name}"?',
+      body: 'The row is kept so the other device learns it is gone.',
+    );
+    if (!ok) return;
+    await widget.db.softDeleteRow(widget.db.engagements, widget.existing!.id);
     if (mounted) Navigator.pop(context);
   }
 }

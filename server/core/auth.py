@@ -169,6 +169,48 @@ def logout(request):
     return JsonResponse({"detail": "signed out"})
 
 
+@csrf_exempt
+def delete_account(request):
+    """POST /auth/delete {password} — removes the account and everything it
+    ever synced. Required by App Store guideline 5.1.1(v) and Google Play for
+    any app that lets people create an account.
+
+    ⚠ BEHIND THE TOKEN AND THE PASSWORD. The token alone is not enough: a phone
+    left unlocked on a table would otherwise be one tap from erasing someone's
+    whole contact list from the server. It is the only irreversible thing this
+    API does, so it asks for the one thing a borrowed phone does not have.
+
+    ⚠ A WRONG PASSWORD IS 403, NOT 401. Clients read 401 as "this device's
+    token was revoked" and sign themselves out; a typo here must not do that.
+
+    ⚠ Rate-limited with login. A token plus an unlimited password check is a
+    password oracle for anyone holding a stolen token.
+
+    Deleting the user cascades: every synced row (SyncedModel.owner) and every
+    device token (AuthToken.user) go with it, so the account's other devices
+    get 401 on their next sync and drop to signed-out on their own. Their local
+    data is untouched — it lives on those devices, not here."""
+    if request.method != "POST":
+        return JsonResponse({"detail": "method not allowed"}, status=405)
+    if _too_many(request):
+        return JsonResponse({"detail": "too many attempts"}, status=429)
+
+    data = _body(request)
+    if data is None:
+        return JsonResponse({"detail": "invalid json"}, status=400)
+
+    user = authenticate(
+        username=request.user.username, password=data.get("password") or ""
+    )
+    if user is None or user.pk != request.user.pk:
+        _record_failure(request)
+        return JsonResponse({"detail": "password is not right"}, status=403)
+
+    with transaction.atomic():
+        user.delete()
+    return JsonResponse({"detail": "account deleted"})
+
+
 def me(request):
     """Lets a client find out whether its stored token is still good without
     running a whole sync."""
