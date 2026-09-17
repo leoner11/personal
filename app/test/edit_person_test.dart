@@ -5,6 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:personal_crm/data/database.dart';
 import 'package:personal_crm/theme/tokens.dart';
 import 'package:personal_crm/ui/add_person_sheet.dart';
+import 'package:personal_crm/ui/phone/edit_person_sheet.dart';
+import 'package:personal_crm/domain/notifications.dart';
+import 'package:personal_crm/domain/tag_vocab.dart';
 
 /// The Mac edit sheet. ⚠ Editing a person was impossible in either shell until
 /// 12 Sep — the only write was a soft delete — so these pin the behaviour that
@@ -12,8 +15,20 @@ import 'package:personal_crm/ui/add_person_sheet.dart';
 /// silently detaches every touch, note and money row pointing at the old one.
 void main() {
   late AppDatabase db;
-  setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
-  tearDown(() => db.close());
+  setUp(() async {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    // ⚠ The tag vocabulary is a TABLE now, and chips render from it. main()
+    // seeds it before the first frame; a test database starts empty, so
+    // without this every occasion chip is simply absent. refresh() rather
+    // than bind() — a drift stream subscription outlives the test and trips
+    // the pending-timer assertion.
+    await seedBuiltInTags(db);
+    await TagVocab.refresh(db);
+  });
+  tearDown(() async {
+    await TagVocab.reset();
+    await db.close();
+  });
 
   Widget host(Widget child) =>
       MaterialApp(theme: buildTheme(Brightness.light), home: child);
@@ -38,7 +53,7 @@ void main() {
   /// starts off-screen and a bare tap() silently hits nothing — which is how
   /// the first version of these tests "passed" while asserting nothing at all.
   Future<void> tapSave(WidgetTester tester) async {
-    await tester.ensureVisible(find.text('Save'));
+    await tester.scrollUntilVisible(find.text('Save'), 120, scrollable: find.descendant(of: find.byType(SingleChildScrollView), matching: find.byType(Scrollable)).last);
     await tester.pump();
     await tester.tap(find.text('Save'));
     await tester.pump();
@@ -128,5 +143,146 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Edit person'), findsOneWidget);
     await unmount(tester);
+  });
+
+  group('phone edit sheet', () {
+    /// ⚠ The REAL test view must be phone-shaped (see tasks_test.dart) — a
+    /// MediaQuery-only override leaves pinned sheet buttons off-viewport.
+    Widget phoneHost(WidgetTester tester, Person p) {
+      tester.view.physicalSize = const Size(1170, 2532); // 390x844 @3x
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      return MaterialApp(
+          theme: buildTheme(Brightness.light),
+          home: PhoneEditPersonSheet(db: db, person: p));
+    }
+    Future<String> seedPhone(
+        {String? wa, String? metWhere, List<String> tags = const []}) async {
+      final id = newId();
+      await db.addPerson(PeopleCompanion.insert(
+        id: Value(id),
+        name: 'Pak Andi',
+        company: const Value('PT Formcase'),
+        waNumber: wa == null ? const Value.absent() : Value(wa),
+        metWhere: metWhere == null ? const Value.absent() : Value(metWhere),
+        metWhen: Value(DateTime(2026, 3, 1)),
+        occasionTags: Value(tags),
+      ));
+      return id;
+    }
+
+    Future<Person> thePerson() async =>
+        (await db.watchPeople().first).single;
+
+    testWidgets('opens prefilled with the met fields and the delete footer',
+        (tester) async {
+      final id = await tester.runAsync(
+          () => seedPhone(wa: '628123456789', metWhere: 'Warung Kopi'))
+          as String;
+      final p = await tester.runAsync(thePerson);
+      expect(p!.id, id);
+      await tester.pumpWidget(phoneHost(tester, p));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+
+      expect(find.text('Edit person'), findsOneWidget);
+      expect(textOf(tester, 0), 'Pak Andi');
+      expect(find.text('Warung Kopi'), findsOneWidget);
+      // The v2 fix: met where/met when have an edit path at all now.
+      expect(find.text('1 Mar'), findsOneWidget);
+      expect(find.text('Delete person'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 10));
+    });
+
+    testWidgets('met when opens the past-capped house sheet and writes',
+        (tester) async {
+      final id =
+          await tester.runAsync(() => seedPhone(wa: '628123456789')) as String;
+      final p = await tester.runAsync(thePerson);
+      await tester.pumpWidget(phoneHost(tester, p!));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+
+      // The met-when row sits below the fold in the sheet's scroll view.
+      await tester.dragUntilVisible(find.text('1 Mar'),
+          find.descendant(of: find.byType(SingleChildScrollView), matching: find.byType(Scrollable)).last, const Offset(0, -120));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+      await tester.tap(find.text('1 Mar'));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+      expect(find.text('Pick a date'), findsOneWidget);
+      // Past-capped: the Today chip exists, the forward offsets do not —
+      // +1w is nonsense for "when did we meet".
+      expect(find.text('today'), findsOneWidget);
+      expect(find.text('+1w'), findsNothing);
+
+      await tester.tap(find.text('today'));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+      await tapSave(tester);
+
+      final after = await peopleAfterSave(tester);
+      final now = DateTime.now();
+      final metWhen = after.single.metWhen!;
+      expect(metWhen.year, now.year);
+      expect(metWhen.month, now.month);
+      expect(metWhen.day, now.day);
+      // And it is genuinely the meeting date that moved, not the row.
+      expect(after.single.id, id);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 10));
+    });
+
+    testWidgets('saves without a channel and leaves metWhen alone',
+        (tester) async {
+      final id = await tester.runAsync(() => seedPhone()) as String;
+      final p = await tester.runAsync(thePerson);
+      await tester.pumpWidget(phoneHost(tester, p!));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+
+      expect(find.textContaining('cannot be messaged'), findsOneWidget);
+      await tapSave(tester);
+
+      final after = await peopleAfterSave(tester);
+      expect(after.single.id, id);
+      // Only a pick writes the date — an untouched sheet must not stamp
+      // `now` onto a row that has an honest blank.
+      expect(after.single.metWhen, DateTime(2026, 3, 1));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 10));
+    });
+
+    testWidgets('the delete footer soft-deletes through the confirm',
+        (tester) async {
+      final id =
+          await tester.runAsync(() => seedPhone(wa: '628123456789')) as String;
+      final p = await tester.runAsync(thePerson);
+      await tester.pumpWidget(phoneHost(tester, p!));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+
+      // ⚠ dragUntilVisible, not ensureVisible: the latter awaits a scroll
+      // animation that never completes under FakeAsync — the test wedges.
+      await tester.dragUntilVisible(find.text('Delete person'),
+          find.descendant(of: find.byType(SingleChildScrollView), matching: find.byType(Scrollable)).last, const Offset(0, -120));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+      await tester.tap(find.text('Delete person'));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+      expect(find.text('Delete Pak Andi?'), findsOneWidget);
+
+      await tester.tap(find.text('Delete'));
+      await tester.pump(const Duration(milliseconds: 60)); await tester.pump(const Duration(milliseconds: 500)); await tester.pump();
+
+      // ⚠ Direct drift awaits inside testWidgets deadlock — runAsync, per the
+      // file header. This is the trap the header warns about, bitten in-house.
+      expect(
+          await tester.runAsync(() => db.watchPeople().first), isEmpty);
+      final raw = await tester.runAsync(
+          () => (db.select(db.people)..where((p) => p.id.equals(id)))
+              .getSingleOrNull());
+      expect(raw, isNotNull);
+      expect(raw!.deletedAt, isNotNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 10));
+    });
   });
 }

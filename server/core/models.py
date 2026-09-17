@@ -71,12 +71,39 @@ class Occasion(SyncedModel):
     date = models.DateTimeField()
     tag = models.CharField(max_length=40)
     country = models.CharField(max_length=20, blank=True, default="")
+    # Phase 3 (design doc): the greeting moves onto the occasion row. An
+    # occasion tagged creatively (Thanksgiving under the New Year audience)
+    # must not inherit the tag festival's template; empty = use the template.
+    greeting = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["date"]
 
     def __str__(self):
         return f"{self.name} {self.date:%Y-%m-%d}"
+
+
+class OccasionTag(SyncedModel):
+    """The user's tag vocabulary. Was a hardcoded nine-value enum in the
+    client, which made the app unusable outside ID/MY/CN: no chip means no way
+    to tag, and no tag means the festival never fires.
+
+    ⚠ slug is the join key, carried as a plain string by Person.occasion_tags,
+    Occasion.tag and Money.occasion_tag. The built-ins keep the old enum names
+    as slugs, so nothing already stored had to migrate."""
+
+    slug = models.CharField(max_length=40)
+    label = models.CharField(max_length=120)
+    hint = models.CharField(max_length=120, blank=True, default="")
+    greeting = models.TextField(blank=True, default="")
+    sort_order = models.IntegerField(default=0)
+    built_in = models.BooleanField(default=False)
+
+    class Meta(SyncedModel.Meta):
+        ordering = ["sort_order", "label"]
+
+    def __str__(self):
+        return self.label
 
 
 class Engagement(SyncedModel):

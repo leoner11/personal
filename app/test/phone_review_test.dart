@@ -7,9 +7,13 @@ import 'package:personal_crm/domain/money_totals.dart';
 import 'package:personal_crm/theme/tokens.dart';
 import 'package:personal_crm/ui/phone/money_screen.dart';
 import 'package:personal_crm/ui/phone/notes_screen.dart';
+import 'package:personal_crm/ui/phone/phone_primitives.dart';
 import 'package:personal_crm/ui/phone/phone_shell.dart';
 import 'package:personal_crm/ui/phone/projects_screen.dart';
 import 'package:personal_crm/ui/phone/review_screen.dart';
+import 'package:personal_crm/ui/phone/tasks_list_screen.dart';
+import 'package:personal_crm/domain/notifications.dart';
+import 'package:personal_crm/domain/tag_vocab.dart';
 
 /// Money, Projects and Notes on the phone.
 ///
@@ -22,8 +26,20 @@ import 'package:personal_crm/ui/phone/review_screen.dart';
 /// label — two tests in the shell file were vacuous for exactly that reason.
 void main() {
   late AppDatabase db;
-  setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
-  tearDown(() => db.close());
+  setUp(() async {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    // ⚠ The tag vocabulary is a TABLE now, and chips render from it. main()
+    // seeds it before the first frame; a test database starts empty, so
+    // without this every occasion chip is simply absent. refresh() rather
+    // than bind() — a drift stream subscription outlives the test and trips
+    // the pending-timer assertion.
+    await seedBuiltInTags(db);
+    await TagVocab.refresh(db);
+  });
+  tearDown(() async {
+    await TagVocab.reset();
+    await db.close();
+  });
 
   Widget host(Widget child) => MaterialApp(
     theme: buildTheme(Brightness.light),
@@ -40,6 +56,9 @@ void main() {
 
   Future<void> unmount(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox.shrink());
+    // ⚠ v2: Today (mounted by the shell) schedules a ~280ms post-collapse
+    // sweep on load — the drain must cover one full sweep window.
+    await tester.pump(const Duration(milliseconds: PM.clearMs + 120));
     await tester.pump(const Duration(milliseconds: 10));
   }
 
@@ -53,11 +72,12 @@ void main() {
     String cur = 'CNY',
     String dir = 'in',
     String status = 'actual',
+    DateTime? date,
   }) => io(
     tester,
     () => db.addMoney(
       MoneyCompanion.insert(
-        date: DateTime(2026, 9, 11),
+        date: date ?? DateTime(2026, 9, 11),
         direction: dir,
         amountMinor: minor,
         currency: Value(cur),
@@ -122,12 +142,18 @@ void main() {
   });
 
   group('the Review tab', () {
-    testWidgets('is the fourth tab and Capture is still the default', (
+    testWidgets('Review is the fifth tab and Capture is still the default', (
       tester,
     ) async {
       await tester.pumpWidget(host(PhoneShell(db: db)));
       await tester.pump();
       expect(currentTab(tester), PhoneTab.capture);
+
+      // v2: Calendar took the fourth slot (it absorbs the occasions browse),
+      // pushing Review to fifth — still one deliberate tap away.
+      await tester.tap(find.text('Calendar'));
+      await tester.pump();
+      expect(currentTab(tester), PhoneTab.calendar);
 
       await tester.tap(find.text('Review'));
       await tester.pump();
@@ -169,6 +195,44 @@ void main() {
       expect(find.text('0 projects'), findsOneWidget);
       await unmount(tester);
     });
+
+    testWidgets('the Tasks row counts open tasks and pushes the list',
+        (tester) async {
+      await io(
+        tester,
+        () => db.addTask(TasksCompanion.insert(
+          title: 'open one',
+          createdAt: Value(DateTime.now()),
+        )),
+      );
+      await io(
+        tester,
+        () async {
+          await db.addTask(TasksCompanion.insert(
+            title: 'done one',
+            createdAt: Value(DateTime.now()),
+          ));
+          final done =
+              (await db.watchTasks().first).firstWhere(
+            (t) => t.title == 'done one',
+          );
+          await db.setTaskDone(done.id, true);
+        },
+      );
+      await tester.pumpWidget(host(PhoneReviewScreen(db: db)));
+      await tester.pump();
+      await tester.pump();
+
+      // Open tasks are what the hub counts; done ones are history.
+      expect(find.text('1 task'), findsOneWidget);
+      expect(find.text('2 tasks'), findsNothing);
+
+      await tester.tap(find.text('Tasks'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(PhoneTasksScreen), findsOneWidget);
+      await unmount(tester);
+    });
   });
 
   group('money', () {
@@ -180,7 +244,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('—'), findsOneWidget);
-      expect(find.text('No money rows yet.'), findsOneWidget);
+      expect(find.text('Nothing has moved yet.'), findsOneWidget);
       await unmount(tester);
     });
 
@@ -231,6 +295,66 @@ void main() {
 
       expect(find.text('—'), findsNothing);
       expect(find.text('COMING IN'), findsNothing);
+      await unmount(tester);
+    });
+
+    testWidgets('an actual row is tappable — the correction path exists', (
+      tester,
+    ) async {
+      // v2 closed the dead-row defect: an actual row used to have no tap at
+      // all, so a mistyped amount was stuck forever on the phone.
+      await addMoney(tester, label: 'Paid already', minor: 100);
+      await tester.pumpWidget(host(PhoneMoneyScreen(db: db)));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Paid already'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Edit money row'), findsOneWidget);
+      await unmount(tester);
+    });
+
+    testWidgets('the ledger is a table: months grouped, actuals only',
+        (tester) async {
+      await addMoney(tester, label: 'Invoice 12', minor: 5000);
+      await addMoney(tester, label: 'Coffee', minor: 3800, dir: 'out');
+      await addMoney(
+        tester,
+        label: 'Old invoice',
+        minor: 1200,
+        date: DateTime(2026, 8, 4),
+      );
+      // Expected stays in COMING IN / COMING OUT — a ledger records what
+      // happened, not projections.
+      await addMoney(
+        tester,
+        label: 'Rent',
+        minor: 900000,
+        status: 'expected',
+      );
+      await tester.pumpWidget(host(PhoneMoneyScreen(db: db)));
+      await tester.pump();
+      await tester.pump();
+
+      // Table grammar: one header row, month group headers, net lines.
+      expect(find.text('DATE'), findsOneWidget);
+      expect(find.text('IN/OUT'), findsOneWidget);
+      expect(find.text('AMOUNT'), findsOneWidget);
+      expect(find.text('SEPTEMBER 2026'), findsOneWidget);
+      expect(find.text('AUGUST 2026'), findsOneWidget);
+      expect(find.text('Net · CNY'), findsNWidgets(2));
+
+      // Direction is a word in its own column, never a colour.
+      expect(find.text('in'), findsNWidgets(2));
+      expect(find.text('out'), findsOneWidget);
+
+      // Expected rows appear exactly once — in COMING OUT, not in the
+      // ledger.
+      expect(find.text('Rent'), findsOneWidget);
+      // ⚠ And settling moved rows keep the read: actuals only, so an
+      // expected row settled to actual joins its month group.
       await unmount(tester);
     });
   });
@@ -406,6 +530,108 @@ void main() {
 
       final left = await io(tester, () => db.watchNotes().first);
       expect(left, isEmpty, reason: 'the autosave must not resurrect it');
+      await unmount(tester);
+    });
+
+    testWidgets('the editor is a pushed full page, not a sheet',
+        (tester) async {
+      await io(
+        tester,
+        () => db
+            .into(db.notes)
+            .insert(
+              NotesCompanion.insert(
+                id: const Value('n1'),
+                date: DateTime(2026, 9, 11),
+              ),
+            ),
+      );
+      await tester.pumpWidget(host(PhoneNotesScreen(db: db)));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('untitled'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(PhoneNoteEditor), findsOneWidget);
+      expect(find.byType(PhoneSheet), findsNothing);
+      await unmount(tester);
+    });
+
+    testWidgets('Done flushes pending edits and pops', (tester) async {
+      await io(
+        tester,
+        () => db
+            .into(db.notes)
+            .insert(
+              NotesCompanion.insert(
+                id: const Value('n1'),
+                date: DateTime(2026, 9, 11),
+              ),
+            ),
+      );
+      await tester.pumpWidget(host(PhoneNotesScreen(db: db)));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.text('untitled'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.enterText(find.byType(TextField).first, 'flushed line');
+      // No debounce wait: Done must save NOW, not on the 600ms timer.
+      await tester.tap(find.text('Done'));
+      // Flush resolves across an async gap, so the pop starts a frame after
+      // the tap — then the transition itself must finish.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 30));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+
+      final saved = await io(tester, () => db.watchNotes().first);
+      expect(saved.single.body, 'flushed line');
+      expect(find.byType(PhoneNoteEditor), findsNothing);
+      await unmount(tester);
+    });
+
+    testWidgets('delete sits behind the details disclosure and confirms',
+        (tester) async {
+      await io(
+        tester,
+        () => db
+            .into(db.notes)
+            .insert(
+              NotesCompanion.insert(
+                id: const Value('n1'),
+                date: DateTime(2026, 9, 11),
+              ),
+            ),
+      );
+      await tester.pumpWidget(host(PhoneNotesScreen(db: db)));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.text('untitled'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(find.text('Details'));
+      await tester.pump(const Duration(milliseconds: PM.clearMs + 50));
+      await tester.tap(find.text('Delete note'));
+      // The confirm is a sheet: it springs a frame after the tap and is
+      // mid-flight at 60ms — pump the full spring before tapping it, or the
+      // tap only WARNS and hits nothing.
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      await tester.tap(find.text('Delete'));
+      await tester.pump();
+      // Confirm exit (~240ms) + page pop transition (~300ms) both finish.
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+
+      final left = await io(tester, () => db.watchNotes().first);
+      expect(left, isEmpty, reason: 'soft delete behind the house confirm');
+      expect(find.byType(PhoneNoteEditor), findsNothing);
       await unmount(tester);
     });
   });

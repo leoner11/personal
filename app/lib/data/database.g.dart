@@ -872,6 +872,17 @@ class $OccasionsTable extends Occasions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _greetingMeta = const VerificationMeta(
+    'greeting',
+  );
+  @override
+  late final GeneratedColumn<String> greeting = GeneratedColumn<String>(
+    'greeting',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
@@ -902,6 +913,7 @@ class $OccasionsTable extends Occasions
     date,
     tag,
     country,
+    greeting,
     updatedAt,
     deletedAt,
   ];
@@ -950,6 +962,12 @@ class $OccasionsTable extends Occasions
         country.isAcceptableOrUnknown(data['country']!, _countryMeta),
       );
     }
+    if (data.containsKey('greeting')) {
+      context.handle(
+        _greetingMeta,
+        greeting.isAcceptableOrUnknown(data['greeting']!, _greetingMeta),
+      );
+    }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
@@ -991,6 +1009,10 @@ class $OccasionsTable extends Occasions
         DriftSqlType.string,
         data['${effectivePrefix}country'],
       ),
+      greeting: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}greeting'],
+      ),
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
@@ -1016,6 +1038,11 @@ class Occasion extends DataClass implements Insertable<Occasion> {
   /// OccasionTag.name — links a date to the people carrying that tag.
   final String tag;
   final String? country;
+
+  /// The occasion's own greeting (Phase 3 of the design doc). An occasion
+  /// tagged creatively (Thanksgiving under the New Year audience) must not
+  /// inherit the tag festival's template; null/empty = use the template.
+  final String? greeting;
   final DateTime updatedAt;
   final DateTime? deletedAt;
   const Occasion({
@@ -1024,6 +1051,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
     required this.date,
     required this.tag,
     this.country,
+    this.greeting,
     required this.updatedAt,
     this.deletedAt,
   });
@@ -1036,6 +1064,9 @@ class Occasion extends DataClass implements Insertable<Occasion> {
     map['tag'] = Variable<String>(tag);
     if (!nullToAbsent || country != null) {
       map['country'] = Variable<String>(country);
+    }
+    if (!nullToAbsent || greeting != null) {
+      map['greeting'] = Variable<String>(greeting);
     }
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || deletedAt != null) {
@@ -1053,6 +1084,9 @@ class Occasion extends DataClass implements Insertable<Occasion> {
       country: country == null && nullToAbsent
           ? const Value.absent()
           : Value(country),
+      greeting: greeting == null && nullToAbsent
+          ? const Value.absent()
+          : Value(greeting),
       updatedAt: Value(updatedAt),
       deletedAt: deletedAt == null && nullToAbsent
           ? const Value.absent()
@@ -1071,6 +1105,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
       date: serializer.fromJson<DateTime>(json['date']),
       tag: serializer.fromJson<String>(json['tag']),
       country: serializer.fromJson<String?>(json['country']),
+      greeting: serializer.fromJson<String?>(json['greeting']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
     );
@@ -1084,6 +1119,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
       'date': serializer.toJson<DateTime>(date),
       'tag': serializer.toJson<String>(tag),
       'country': serializer.toJson<String?>(country),
+      'greeting': serializer.toJson<String?>(greeting),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
     };
@@ -1095,6 +1131,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
     DateTime? date,
     String? tag,
     Value<String?> country = const Value.absent(),
+    Value<String?> greeting = const Value.absent(),
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
   }) => Occasion(
@@ -1103,6 +1140,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
     date: date ?? this.date,
     tag: tag ?? this.tag,
     country: country.present ? country.value : this.country,
+    greeting: greeting.present ? greeting.value : this.greeting,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
   );
@@ -1113,6 +1151,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
       date: data.date.present ? data.date.value : this.date,
       tag: data.tag.present ? data.tag.value : this.tag,
       country: data.country.present ? data.country.value : this.country,
+      greeting: data.greeting.present ? data.greeting.value : this.greeting,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
     );
@@ -1126,6 +1165,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
           ..write('date: $date, ')
           ..write('tag: $tag, ')
           ..write('country: $country, ')
+          ..write('greeting: $greeting, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt')
           ..write(')'))
@@ -1134,7 +1174,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
 
   @override
   int get hashCode =>
-      Object.hash(id, name, date, tag, country, updatedAt, deletedAt);
+      Object.hash(id, name, date, tag, country, greeting, updatedAt, deletedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1144,6 +1184,7 @@ class Occasion extends DataClass implements Insertable<Occasion> {
           other.date == this.date &&
           other.tag == this.tag &&
           other.country == this.country &&
+          other.greeting == this.greeting &&
           other.updatedAt == this.updatedAt &&
           other.deletedAt == this.deletedAt);
 }
@@ -1154,6 +1195,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
   final Value<DateTime> date;
   final Value<String> tag;
   final Value<String?> country;
+  final Value<String?> greeting;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
   final Value<int> rowid;
@@ -1163,6 +1205,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
     this.date = const Value.absent(),
     this.tag = const Value.absent(),
     this.country = const Value.absent(),
+    this.greeting = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1173,6 +1216,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
     required DateTime date,
     required String tag,
     this.country = const Value.absent(),
+    this.greeting = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1185,6 +1229,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
     Expression<DateTime>? date,
     Expression<String>? tag,
     Expression<String>? country,
+    Expression<String>? greeting,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
     Expression<int>? rowid,
@@ -1195,6 +1240,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
       if (date != null) 'date': date,
       if (tag != null) 'tag': tag,
       if (country != null) 'country': country,
+      if (greeting != null) 'greeting': greeting,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1207,6 +1253,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
     Value<DateTime>? date,
     Value<String>? tag,
     Value<String?>? country,
+    Value<String?>? greeting,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
     Value<int>? rowid,
@@ -1217,6 +1264,7 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
       date: date ?? this.date,
       tag: tag ?? this.tag,
       country: country ?? this.country,
+      greeting: greeting ?? this.greeting,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       rowid: rowid ?? this.rowid,
@@ -1241,6 +1289,9 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
     if (country.present) {
       map['country'] = Variable<String>(country.value);
     }
+    if (greeting.present) {
+      map['greeting'] = Variable<String>(greeting.value);
+    }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
@@ -1261,6 +1312,576 @@ class OccasionsCompanion extends UpdateCompanion<Occasion> {
           ..write('date: $date, ')
           ..write('tag: $tag, ')
           ..write('country: $country, ')
+          ..write('greeting: $greeting, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OccasionTagsTable extends OccasionTags
+    with TableInfo<$OccasionTagsTable, OccasionTagRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OccasionTagsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _slugMeta = const VerificationMeta('slug');
+  @override
+  late final GeneratedColumn<String> slug = GeneratedColumn<String>(
+    'slug',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hintMeta = const VerificationMeta('hint');
+  @override
+  late final GeneratedColumn<String> hint = GeneratedColumn<String>(
+    'hint',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _greetingMeta = const VerificationMeta(
+    'greeting',
+  );
+  @override
+  late final GeneratedColumn<String> greeting = GeneratedColumn<String>(
+    'greeting',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _builtInMeta = const VerificationMeta(
+    'builtIn',
+  );
+  @override
+  late final GeneratedColumn<bool> builtIn = GeneratedColumn<bool>(
+    'built_in',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("built_in" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    slug,
+    label,
+    hint,
+    greeting,
+    sortOrder,
+    builtIn,
+    updatedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'occasion_tags';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OccasionTagRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('slug')) {
+      context.handle(
+        _slugMeta,
+        slug.isAcceptableOrUnknown(data['slug']!, _slugMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_slugMeta);
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('hint')) {
+      context.handle(
+        _hintMeta,
+        hint.isAcceptableOrUnknown(data['hint']!, _hintMeta),
+      );
+    }
+    if (data.containsKey('greeting')) {
+      context.handle(
+        _greetingMeta,
+        greeting.isAcceptableOrUnknown(data['greeting']!, _greetingMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('built_in')) {
+      context.handle(
+        _builtInMeta,
+        builtIn.isAcceptableOrUnknown(data['built_in']!, _builtInMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  OccasionTagRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OccasionTagRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      slug: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}slug'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      hint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}hint'],
+      ),
+      greeting: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}greeting'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      builtIn: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}built_in'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $OccasionTagsTable createAlias(String alias) {
+    return $OccasionTagsTable(attachedDatabase, alias);
+  }
+}
+
+class OccasionTagRow extends DataClass implements Insertable<OccasionTagRow> {
+  final String id;
+
+  /// The stable key written into people/occasions/money. Never changes once
+  /// minted — renaming a tag edits [label] only, so tagged people follow.
+  final String slug;
+  final String label;
+
+  /// The audience note under the chip ('CN + MY/ID Chinese'). Optional: a
+  /// user-made tag usually needs no explanation to the person who made it.
+  final String? hint;
+
+  /// This tag's default greeting. Sits between the occasion's own greeting and
+  /// the built-in [kGreetings] templates — see the resolution order in
+  /// occasion_run_screen.dart. Null/empty = fall through.
+  final String? greeting;
+
+  /// Chip order. Built-ins seed 0..8; user tags land after.
+  final int sortOrder;
+
+  /// Seeded from [OccasionTag] rather than typed by the user. Controls two
+  /// things only: whether [kGreetings] applies, and whether the occasion
+  /// backfill may add dates for it. NOT a permission — built-ins rename and
+  /// delete exactly like any other tag.
+  final bool builtIn;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  const OccasionTagRow({
+    required this.id,
+    required this.slug,
+    required this.label,
+    this.hint,
+    this.greeting,
+    required this.sortOrder,
+    required this.builtIn,
+    required this.updatedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['slug'] = Variable<String>(slug);
+    map['label'] = Variable<String>(label);
+    if (!nullToAbsent || hint != null) {
+      map['hint'] = Variable<String>(hint);
+    }
+    if (!nullToAbsent || greeting != null) {
+      map['greeting'] = Variable<String>(greeting);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['built_in'] = Variable<bool>(builtIn);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  OccasionTagsCompanion toCompanion(bool nullToAbsent) {
+    return OccasionTagsCompanion(
+      id: Value(id),
+      slug: Value(slug),
+      label: Value(label),
+      hint: hint == null && nullToAbsent ? const Value.absent() : Value(hint),
+      greeting: greeting == null && nullToAbsent
+          ? const Value.absent()
+          : Value(greeting),
+      sortOrder: Value(sortOrder),
+      builtIn: Value(builtIn),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory OccasionTagRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OccasionTagRow(
+      id: serializer.fromJson<String>(json['id']),
+      slug: serializer.fromJson<String>(json['slug']),
+      label: serializer.fromJson<String>(json['label']),
+      hint: serializer.fromJson<String?>(json['hint']),
+      greeting: serializer.fromJson<String?>(json['greeting']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      builtIn: serializer.fromJson<bool>(json['builtIn']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'slug': serializer.toJson<String>(slug),
+      'label': serializer.toJson<String>(label),
+      'hint': serializer.toJson<String?>(hint),
+      'greeting': serializer.toJson<String?>(greeting),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'builtIn': serializer.toJson<bool>(builtIn),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  OccasionTagRow copyWith({
+    String? id,
+    String? slug,
+    String? label,
+    Value<String?> hint = const Value.absent(),
+    Value<String?> greeting = const Value.absent(),
+    int? sortOrder,
+    bool? builtIn,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => OccasionTagRow(
+    id: id ?? this.id,
+    slug: slug ?? this.slug,
+    label: label ?? this.label,
+    hint: hint.present ? hint.value : this.hint,
+    greeting: greeting.present ? greeting.value : this.greeting,
+    sortOrder: sortOrder ?? this.sortOrder,
+    builtIn: builtIn ?? this.builtIn,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  OccasionTagRow copyWithCompanion(OccasionTagsCompanion data) {
+    return OccasionTagRow(
+      id: data.id.present ? data.id.value : this.id,
+      slug: data.slug.present ? data.slug.value : this.slug,
+      label: data.label.present ? data.label.value : this.label,
+      hint: data.hint.present ? data.hint.value : this.hint,
+      greeting: data.greeting.present ? data.greeting.value : this.greeting,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      builtIn: data.builtIn.present ? data.builtIn.value : this.builtIn,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OccasionTagRow(')
+          ..write('id: $id, ')
+          ..write('slug: $slug, ')
+          ..write('label: $label, ')
+          ..write('hint: $hint, ')
+          ..write('greeting: $greeting, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('builtIn: $builtIn, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    slug,
+    label,
+    hint,
+    greeting,
+    sortOrder,
+    builtIn,
+    updatedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OccasionTagRow &&
+          other.id == this.id &&
+          other.slug == this.slug &&
+          other.label == this.label &&
+          other.hint == this.hint &&
+          other.greeting == this.greeting &&
+          other.sortOrder == this.sortOrder &&
+          other.builtIn == this.builtIn &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class OccasionTagsCompanion extends UpdateCompanion<OccasionTagRow> {
+  final Value<String> id;
+  final Value<String> slug;
+  final Value<String> label;
+  final Value<String?> hint;
+  final Value<String?> greeting;
+  final Value<int> sortOrder;
+  final Value<bool> builtIn;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const OccasionTagsCompanion({
+    this.id = const Value.absent(),
+    this.slug = const Value.absent(),
+    this.label = const Value.absent(),
+    this.hint = const Value.absent(),
+    this.greeting = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.builtIn = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OccasionTagsCompanion.insert({
+    required String id,
+    required String slug,
+    required String label,
+    this.hint = const Value.absent(),
+    this.greeting = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.builtIn = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       slug = Value(slug),
+       label = Value(label);
+  static Insertable<OccasionTagRow> custom({
+    Expression<String>? id,
+    Expression<String>? slug,
+    Expression<String>? label,
+    Expression<String>? hint,
+    Expression<String>? greeting,
+    Expression<int>? sortOrder,
+    Expression<bool>? builtIn,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (slug != null) 'slug': slug,
+      if (label != null) 'label': label,
+      if (hint != null) 'hint': hint,
+      if (greeting != null) 'greeting': greeting,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (builtIn != null) 'built_in': builtIn,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OccasionTagsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? slug,
+    Value<String>? label,
+    Value<String?>? hint,
+    Value<String?>? greeting,
+    Value<int>? sortOrder,
+    Value<bool>? builtIn,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return OccasionTagsCompanion(
+      id: id ?? this.id,
+      slug: slug ?? this.slug,
+      label: label ?? this.label,
+      hint: hint ?? this.hint,
+      greeting: greeting ?? this.greeting,
+      sortOrder: sortOrder ?? this.sortOrder,
+      builtIn: builtIn ?? this.builtIn,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (slug.present) {
+      map['slug'] = Variable<String>(slug.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (hint.present) {
+      map['hint'] = Variable<String>(hint.value);
+    }
+    if (greeting.present) {
+      map['greeting'] = Variable<String>(greeting.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (builtIn.present) {
+      map['built_in'] = Variable<bool>(builtIn.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OccasionTagsCompanion(')
+          ..write('id: $id, ')
+          ..write('slug: $slug, ')
+          ..write('label: $label, ')
+          ..write('hint: $hint, ')
+          ..write('greeting: $greeting, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('builtIn: $builtIn, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
           ..write('rowid: $rowid')
@@ -4742,6 +5363,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $PeopleTable people = $PeopleTable(this);
   late final $OccasionsTable occasions = $OccasionsTable(this);
+  late final $OccasionTagsTable occasionTags = $OccasionTagsTable(this);
   late final $EngagementsTable engagements = $EngagementsTable(this);
   late final $MoneyTable money = $MoneyTable(this);
   late final $NotesTable notes = $NotesTable(this);
@@ -4755,6 +5377,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     people,
     occasions,
+    occasionTags,
     engagements,
     money,
     notes,
@@ -5142,6 +5765,7 @@ typedef $$OccasionsTableCreateCompanionBuilder =
       required DateTime date,
       required String tag,
       Value<String?> country,
+      Value<String?> greeting,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
       Value<int> rowid,
@@ -5153,6 +5777,7 @@ typedef $$OccasionsTableUpdateCompanionBuilder =
       Value<DateTime> date,
       Value<String> tag,
       Value<String?> country,
+      Value<String?> greeting,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
       Value<int> rowid,
@@ -5189,6 +5814,11 @@ class $$OccasionsTableFilterComposer
 
   ColumnFilters<String> get country => $composableBuilder(
     column: $table.country,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get greeting => $composableBuilder(
+    column: $table.greeting,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5237,6 +5867,11 @@ class $$OccasionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get greeting => $composableBuilder(
+    column: $table.greeting,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
@@ -5271,6 +5906,9 @@ class $$OccasionsTableAnnotationComposer
 
   GeneratedColumn<String> get country =>
       $composableBuilder(column: $table.country, builder: (column) => column);
+
+  GeneratedColumn<String> get greeting =>
+      $composableBuilder(column: $table.greeting, builder: (column) => column);
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
@@ -5312,6 +5950,7 @@ class $$OccasionsTableTableManager
                 Value<DateTime> date = const Value.absent(),
                 Value<String> tag = const Value.absent(),
                 Value<String?> country = const Value.absent(),
+                Value<String?> greeting = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -5321,6 +5960,7 @@ class $$OccasionsTableTableManager
                 date: date,
                 tag: tag,
                 country: country,
+                greeting: greeting,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
                 rowid: rowid,
@@ -5332,6 +5972,7 @@ class $$OccasionsTableTableManager
                 required DateTime date,
                 required String tag,
                 Value<String?> country = const Value.absent(),
+                Value<String?> greeting = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -5341,6 +5982,7 @@ class $$OccasionsTableTableManager
                 date: date,
                 tag: tag,
                 country: country,
+                greeting: greeting,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
                 rowid: rowid,
@@ -5365,6 +6007,282 @@ typedef $$OccasionsTableProcessedTableManager =
       $$OccasionsTableUpdateCompanionBuilder,
       (Occasion, BaseReferences<_$AppDatabase, $OccasionsTable, Occasion>),
       Occasion,
+      PrefetchHooks Function()
+    >;
+typedef $$OccasionTagsTableCreateCompanionBuilder =
+    OccasionTagsCompanion Function({
+      required String id,
+      required String slug,
+      required String label,
+      Value<String?> hint,
+      Value<String?> greeting,
+      Value<int> sortOrder,
+      Value<bool> builtIn,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$OccasionTagsTableUpdateCompanionBuilder =
+    OccasionTagsCompanion Function({
+      Value<String> id,
+      Value<String> slug,
+      Value<String> label,
+      Value<String?> hint,
+      Value<String?> greeting,
+      Value<int> sortOrder,
+      Value<bool> builtIn,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$OccasionTagsTableFilterComposer
+    extends Composer<_$AppDatabase, $OccasionTagsTable> {
+  $$OccasionTagsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get slug => $composableBuilder(
+    column: $table.slug,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get hint => $composableBuilder(
+    column: $table.hint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get greeting => $composableBuilder(
+    column: $table.greeting,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get builtIn => $composableBuilder(
+    column: $table.builtIn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OccasionTagsTableOrderingComposer
+    extends Composer<_$AppDatabase, $OccasionTagsTable> {
+  $$OccasionTagsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get slug => $composableBuilder(
+    column: $table.slug,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get hint => $composableBuilder(
+    column: $table.hint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get greeting => $composableBuilder(
+    column: $table.greeting,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get builtIn => $composableBuilder(
+    column: $table.builtIn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OccasionTagsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OccasionTagsTable> {
+  $$OccasionTagsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get slug =>
+      $composableBuilder(column: $table.slug, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<String> get hint =>
+      $composableBuilder(column: $table.hint, builder: (column) => column);
+
+  GeneratedColumn<String> get greeting =>
+      $composableBuilder(column: $table.greeting, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get builtIn =>
+      $composableBuilder(column: $table.builtIn, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$OccasionTagsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $OccasionTagsTable,
+          OccasionTagRow,
+          $$OccasionTagsTableFilterComposer,
+          $$OccasionTagsTableOrderingComposer,
+          $$OccasionTagsTableAnnotationComposer,
+          $$OccasionTagsTableCreateCompanionBuilder,
+          $$OccasionTagsTableUpdateCompanionBuilder,
+          (
+            OccasionTagRow,
+            BaseReferences<_$AppDatabase, $OccasionTagsTable, OccasionTagRow>,
+          ),
+          OccasionTagRow,
+          PrefetchHooks Function()
+        > {
+  $$OccasionTagsTableTableManager(_$AppDatabase db, $OccasionTagsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OccasionTagsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OccasionTagsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OccasionTagsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> slug = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<String?> hint = const Value.absent(),
+                Value<String?> greeting = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> builtIn = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OccasionTagsCompanion(
+                id: id,
+                slug: slug,
+                label: label,
+                hint: hint,
+                greeting: greeting,
+                sortOrder: sortOrder,
+                builtIn: builtIn,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String slug,
+                required String label,
+                Value<String?> hint = const Value.absent(),
+                Value<String?> greeting = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> builtIn = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OccasionTagsCompanion.insert(
+                id: id,
+                slug: slug,
+                label: label,
+                hint: hint,
+                greeting: greeting,
+                sortOrder: sortOrder,
+                builtIn: builtIn,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OccasionTagsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $OccasionTagsTable,
+      OccasionTagRow,
+      $$OccasionTagsTableFilterComposer,
+      $$OccasionTagsTableOrderingComposer,
+      $$OccasionTagsTableAnnotationComposer,
+      $$OccasionTagsTableCreateCompanionBuilder,
+      $$OccasionTagsTableUpdateCompanionBuilder,
+      (
+        OccasionTagRow,
+        BaseReferences<_$AppDatabase, $OccasionTagsTable, OccasionTagRow>,
+      ),
+      OccasionTagRow,
       PrefetchHooks Function()
     >;
 typedef $$EngagementsTableCreateCompanionBuilder =
@@ -7054,6 +7972,8 @@ class $AppDatabaseManager {
       $$PeopleTableTableManager(_db, _db.people);
   $$OccasionsTableTableManager get occasions =>
       $$OccasionsTableTableManager(_db, _db.occasions);
+  $$OccasionTagsTableTableManager get occasionTags =>
+      $$OccasionTagsTableTableManager(_db, _db.occasionTags);
   $$EngagementsTableTableManager get engagements =>
       $$EngagementsTableTableManager(_db, _db.engagements);
   $$MoneyTableTableManager get money =>

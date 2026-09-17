@@ -55,6 +55,9 @@ class SyncEngine {
       'tables': {
         'people': (await db.select(db.people).get()).map(_person).toList(),
         'occasions': (await db.select(db.occasions).get()).map(_occasion).toList(),
+        'occasion_tags': (await db.select(db.occasionTags).get())
+            .map(_occasionTag)
+            .toList(),
         'engagements':
             (await db.select(db.engagements).get()).map(_engagement).toList(),
         'money': (await db.select(db.money).get()).map(_money).toList(),
@@ -119,6 +122,26 @@ class SyncEngine {
             date: Value(_d(row['date']) ?? DateTime.now()),
             tag: Value(row['tag'] ?? ''),
             country: Value(_s(row['country'])),
+            greeting: Value(_s(row['greeting'])),
+            updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
+            deletedAt: Value(_d(row['deleted_at'])),
+          ));
+    }
+
+    // ⚠ The vocabulary, not a join table. A tag arriving from the other device
+    // is what makes a person's chips resolve there; without it the label falls
+    // back to the raw slug and the chip cannot be toggled off.
+    for (final row in (tables['occasion_tags'] as List? ?? [])) {
+      await db
+          .into(db.occasionTags)
+          .insertOnConflictUpdate(OccasionTagsCompanion(
+            id: Value(row['id'] as String),
+            slug: Value(row['slug'] ?? ''),
+            label: Value(row['label'] ?? ''),
+            hint: Value(_s(row['hint'])),
+            greeting: Value(_s(row['greeting'])),
+            sortOrder: Value((row['sort_order'] as int?) ?? 0),
+            builtIn: Value(row['built_in'] == true),
             updatedAt: Value(_d(row['updated_at']) ?? DateTime.now()),
             deletedAt: Value(_d(row['deleted_at'])),
           ));
@@ -246,7 +269,19 @@ class SyncEngine {
         'date': o.date.toUtc().toIso8601String(),
         'tag': o.tag,
         'country': o.country ?? '',
+        'greeting': o.greeting ?? '',
         'deleted_at': o.deletedAt?.toUtc().toIso8601String(),
+      };
+
+  Map<String, dynamic> _occasionTag(OccasionTagRow t) => {
+        'id': t.id,
+        'slug': t.slug,
+        'label': t.label,
+        'hint': t.hint ?? '',
+        'greeting': t.greeting ?? '',
+        'sort_order': t.sortOrder,
+        'built_in': t.builtIn,
+        'deleted_at': t.deletedAt?.toUtc().toIso8601String(),
       };
 
   Map<String, dynamic> _engagement(Engagement e) => {

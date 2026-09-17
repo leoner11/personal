@@ -348,10 +348,19 @@ Future<int> backfillSeedOccasions(AppDatabase db) async {
   final rows = await db.select(db.occasions).get(); // includes soft-deleted
   final taken = {for (final o in rows) (o.tag, o.date.year)};
 
+  // ⚠ A DELETED TAG STAYS DELETED, AND SO DO ITS DATES. Tags are the user's
+  // vocabulary now: someone with no Chinese contacts deletes 春节, and
+  // deleteOccasionTag soft-deletes its occasions with it. Without this guard
+  // the very next launch would seed 春节 2027/2028/2029 straight back — the
+  // delete would look broken, and worse, it would look broken three years at
+  // a time. Matching on (tag, year) is what makes that possible cheaply.
+  final live = {for (final t in await db.allOccasionTags()) t.slug};
+
   var added = 0;
   for (final row in kSeedOccasions) {
     final key = (row.$3.name, row.$2.year);
     if (taken.contains(key)) continue;
+    if (!live.contains(row.$3.name)) continue;
     await db.into(db.occasions).insert(OccasionsCompanion.insert(
           id: Value(seededId(occasionSeedKey(row.$1, row.$2))),
           name: row.$1,
@@ -360,6 +369,42 @@ Future<int> backfillSeedOccasions(AppDatabase db) async {
           country: Value(row.$4),
         ));
     taken.add(key);
+    added++;
+  }
+  return added;
+}
+
+/// Seeds the built-in tag vocabulary, and adds built-ins missing from an
+/// install that already exists.
+///
+/// ⚠ ONE FUNCTION, NOT A seed/backfill PAIR. Occasions need both because they
+/// are dated and run out; tags do not. The (slug) slot is either taken or it
+/// is not, and a soft-deleted row still takes it — so the same pass is correct
+/// on a virgin database and on an upgrade, and running it twice adds nothing.
+///
+/// ⚠ INCLUDES SOFT-DELETED ROWS when deciding what is taken. A user who
+/// deleted Deepavali must not find it back tomorrow.
+///
+/// ⚠ NEVER OVERWRITES. A renamed built-in ('Lebaran / Aidilfitri' → 'Raya')
+/// keeps its new label across upgrades: this only ever inserts slots nobody
+/// holds. Renaming edits the label, never the slug, so tagged people follow.
+Future<int> seedBuiltInTags(AppDatabase db) async {
+  final taken = {
+    for (final t in await db.allOccasionTagsIncludingDeleted()) t.slug
+  };
+
+  var added = 0;
+  for (final (slug, label, hint, order) in kBuiltInTags) {
+    if (taken.contains(slug)) continue;
+    await db.upsertOccasionTag(OccasionTagsCompanion.insert(
+      id: seededId('tag:$slug'),
+      slug: slug,
+      label: label,
+      hint: Value(hint),
+      sortOrder: Value(order),
+      builtIn: const Value(true),
+    ));
+    taken.add(slug);
     added++;
   }
   return added;

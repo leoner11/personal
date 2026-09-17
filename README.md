@@ -21,17 +21,15 @@
 
 (THIS IS AI WRITTEN BUT ITS TRUEEEE)
 
-Most personal CRMs fail the same way: you stop opening them by week three. Personal is built
-around that failure rather than around a contact database.
+most personal CRMs that i used i feel is too business-ey? like i cant even know and theres like so many features and its too customizable that i get overwhelmed even before i use it extensively, so im building **Personal**
 
-- **Today is a prompt feed, not a dashboard.** It shows only what needs doing now, and on most
-  days that is nothing, which is how it should be.
-- **Reminders come to you.** Every date the app knows about becomes a local notification at
-  09:00, so you do not have to remember to open it.
-- **Lead time is the point.** A festival reminder on the day is useless if a gift was needed,
-  so occasions remind you two weeks out, three days out, and the day after.
-- **Local-first.** Everything lives in a SQLite database on your machine. Sync is optional and
-  never blocks a screen.
+it has no CRM features like importing from linkedin and etc which is just extra work and i never use it anyway, it has 3 guiding principles (i think):
+
+1. keep it minimal
+2. no overwhelming features
+3. make it easy to use and understand
+
+i want the app to be something that i actually use everyday and not something that i install and forget about, and honestly i dont even need AI, AI is just a gimmick to make the app look fancy
 
 
 ## Features
@@ -42,7 +40,7 @@ around that failure rather than around a contact database.
 |---|---|
 | ☀️ **Today** | Meetings today and tomorrow, tasks due or overdue, occasions in the next 14 days, follow-up pings, and expected money to confirm. |
 | ✅ **Tasks** | Type a line and press Enter. Add a due date or link a person or project when it matters. Tasks show on the calendar, and on Today when due. |
-| 📅 **Calendar** | Month grid with the day's detail beneath. Meetings with time, place and links, reminded the day before and an hour before. Export a meeting to your calendar app. |
+| 📅 **Calendar** | Month grid with the day's detail beneath. Meetings with time, place and links, reminded the day before and an hour before. Add a meeting to your real calendar — Calendar.app on the desktop, the phone's own new-event screen on iOS and Android. |
 | 👥 **People** | WhatsApp or WeChat channel, occasion tags, follow-up pings, and a timeline of touches, notes, money and meetings. |
 | 🎁 **Occasions** | A seeded three-year calendar of Chinese, Indonesian and Malaysian festivals. Reminders go to anyone tagged, and you are warned before the calendar runs out. |
 | 📁 **Projects** | Deals, JVs, clients and leads, with a free-text status, on purpose. It is not a sales pipeline. |
@@ -52,6 +50,14 @@ around that failure rather than around a contact database.
 ## Download
 
 Get the latest build from **[Releases](https://github.com/leoner11/personal/releases/latest)**.
+
+its free for **macOS and Windows**, but im planning to make it paid for **android and ios**, like $1-5 dollars for a lifetime sync, because I need to cover for the developer account fees and the server fees to sync if u wanna use the one hosted by me. 
+
+but u can always self host it u know, if u want. and i wouldnt mind at all.
+
+but im also open for donations, if the donations are really enough for the thing then i might just make it free lol.
+
+please support my personal project so i can keep bringing more features that humans like.
 
 ### macOS
 

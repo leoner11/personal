@@ -4,7 +4,7 @@ import '../../data/database.dart';
 import '../../domain/channel.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/recency.dart';
-import '../../domain/occasions.dart';
+import '../../domain/tag_vocab.dart';
 import '../../theme/tokens.dart';
 import '../add_person_sheet.dart';
 import '../platform.dart';
@@ -214,12 +214,21 @@ class _PeopleScreenState extends State<PeopleScreen> {
               if (p.occasionTags.isEmpty)
                 Text('none tagged', style: T.body.copyWith(color: t.textMuted))
               else
-                Wrap(spacing: 6, runSpacing: 6, children: [
-                  for (final tag in p.occasionTags)
-                    StatusTag(
-                        tone: t.neutral,
-                        label: OccasionTag.fromId(tag)?.label ?? tag),
-                ]),
+                // ⚠ Listens to the vocabulary, not just to the person: a tag
+                // renamed in the manager has to relabel here without a
+                // navigation to force the rebuild.
+                ValueListenableBuilder<List<OccasionTagRow>>(
+                  valueListenable: TagVocab.all,
+                  builder: (context, _, _) => Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final tag in p.occasionTags)
+                          StatusTag(
+                              tone: t.neutral,
+                              label: TagVocab.labelFor(tag)),
+                      ]),
+                ),
               if (p.notes != null && p.notes!.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 _kv('NOTES', p.notes!, t),

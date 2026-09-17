@@ -15,5 +15,9 @@ server/**/__pycache__/
 # memory; they are simply not tracked. Root level only, so the technical
 # READMEs under app/ and server/ are unaffected.
 /*.md
+
 !/README.md
-"MJCX Studio(1).png"
+
+# Session-2 screenshot passes (typography before/after, ledger, editor).
+/shots/
+/mockups/

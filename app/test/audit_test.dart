@@ -5,12 +5,25 @@ import 'package:personal_crm/data/database.dart';
 import 'package:personal_crm/domain/config.dart';
 import 'package:personal_crm/domain/notifications.dart';
 import 'package:personal_crm/domain/occasions.dart';
+import 'package:personal_crm/domain/tag_vocab.dart';
 
 /// Regressions for the column-exists-but-feature-missing audit.
 void main() {
   late AppDatabase db;
-  setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
-  tearDown(() => db.close());
+  setUp(() async {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    // ⚠ The tag vocabulary is a TABLE now, and chips render from it. main()
+    // seeds it before the first frame; a test database starts empty, so
+    // without this every occasion chip is simply absent. refresh() rather
+    // than bind() — a drift stream subscription outlives the test and trips
+    // the pending-timer assertion.
+    await seedBuiltInTags(db);
+    await TagVocab.refresh(db);
+  });
+  tearDown(() async {
+    await TagVocab.reset();
+    await db.close();
+  });
 
   test('a money row can be dated in the future, not just now', () async {
     // COMING IN / COMING OUT is entirely about future money. Rows pinned to
@@ -177,7 +190,13 @@ void main() {
 
   group('backfillSeedOccasions', () {
     late AppDatabase db;
-    setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
+    setUp(() async {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      // The backfill refuses to seed dates for a tag the vocabulary does not
+      // hold — that is what keeps a deleted tag deleted. Seed it here too.
+      await seedBuiltInTags(db);
+      await TagVocab.refresh(db);
+    });
     tearDown(() => db.close());
 
     test('tops up a calendar seeded before a tag existed', () async {

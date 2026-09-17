@@ -91,5 +91,13 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
+        <!-- ⚠ Same reason, for "Add to calendar". Android 11 package
+             visibility hides the calendar app from the ACTION_INSERT intent
+             unless it is declared here, and the add then fails with no error
+             the user can see. -->
+        <intent>
+            <action android:name="android.intent.action.INSERT"/>
+            <data android:mimeType="vnd.android.cursor.dir/event"/>
+        </intent>
     </queries>
 </manifest>

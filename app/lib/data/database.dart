@@ -86,6 +86,57 @@ class Occasions extends Table {
   /// OccasionTag.name — links a date to the people carrying that tag.
   TextColumn get tag => text()();
   TextColumn get country => text().nullable()();
+  /// The occasion's own greeting (Phase 3 of the design doc). An occasion
+  /// tagged creatively (Thanksgiving under the New Year audience) must not
+  /// inherit the tag festival's template; null/empty = use the template.
+  TextColumn get greeting => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// D3b — the occasion TAG vocabulary, as data rather than a Dart enum.
+///
+/// ⚠ WHY THIS IS A TABLE. The nine tags in [OccasionTag] cover Indonesian,
+/// Malaysian and Chinese contacts because that is who Leonard knows. Shipped
+/// to anyone else the list is not merely incomplete, it is unfixable from
+/// inside the app: no chip means no way to tag, and no way to tag means the
+/// festival never fires. The vocabulary has to be the user's, not the build's.
+///
+/// ⚠ [slug] IS THE JOIN KEY, NOT [id]. People carry a comma-joined list of
+/// slugs, occasions carry one, money carries one — all as plain strings, all
+/// written long before this table existed. The nine built-ins therefore keep
+/// their exact enum names as slugs ('cny', 'midAutumn', …) so that not one
+/// existing row has to migrate.
+///
+/// ⚠ [id] is seededId('tag:`<slug>`'), the same trick occasions use: two
+/// devices that independently create 'hanukkah' derive the SAME v5 uuid
+/// offline, and
+/// last-write-wins collapses them into one row instead of keeping both and
+/// drawing the chip twice.
+@DataClassName('OccasionTagRow')
+class OccasionTags extends Table {
+  TextColumn get id => text()();
+  /// The stable key written into people/occasions/money. Never changes once
+  /// minted — renaming a tag edits [label] only, so tagged people follow.
+  TextColumn get slug => text()();
+  TextColumn get label => text()();
+  /// The audience note under the chip ('CN + MY/ID Chinese'). Optional: a
+  /// user-made tag usually needs no explanation to the person who made it.
+  TextColumn get hint => text().nullable()();
+  /// This tag's default greeting. Sits between the occasion's own greeting and
+  /// the built-in [kGreetings] templates — see the resolution order in
+  /// occasion_run_screen.dart. Null/empty = fall through.
+  TextColumn get greeting => text().nullable()();
+  /// Chip order. Built-ins seed 0..8; user tags land after.
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  /// Seeded from [OccasionTag] rather than typed by the user. Controls two
+  /// things only: whether [kGreetings] applies, and whether the occasion
+  /// backfill may add dates for it. NOT a permission — built-ins rename and
+  /// delete exactly like any other tag.
+  BoolColumn get builtIn => boolean().withDefault(const Constant(false))();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get deletedAt => dateTime().nullable()();
 
@@ -239,14 +290,15 @@ class Tasks extends Table {
 }
 
 @DriftDatabase(tables: [
-  People, Occasions, Engagements, Money, Notes, Touches, Meetings, Tasks
+  People, Occasions, OccasionTags, Engagements, Money, Notes, Touches,
+  Meetings, Tasks
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'personal_crm'));
-  AppDatabase.forTesting(QueryExecutor e) : super(e);
+  AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -283,6 +335,19 @@ class AppDatabase extends _$AppDatabase {
           // v6 adds tasks. ⚠ createTable only, same as v5 — real data.
           if (from < 6) {
             await m.createTable(tasks);
+          }
+          // v7 adds the per-occasion greeting (Phase 3). addColumn only —
+          // existing rows read as null, which means "use the tag template".
+          if (from < 7) {
+            await m.addColumn(occasions, occasions.greeting);
+          }
+          // v8 turns the tag vocabulary into data. ⚠ createTable only, and the
+          // built-ins seed with their enum names as slugs, so every existing
+          // person/occasion/money row keeps pointing at exactly what it always
+          // did. seedBuiltInTags() fills it — see notifications.dart, which
+          // also backfills installs that upgrade rather than install fresh.
+          if (from < 8) {
+            await m.createTable(occasionTags);
           }
         },
       );
@@ -357,6 +422,81 @@ extension Queries on AppDatabase {
         ..where((o) => o.deletedAt.isNull())
         ..orderBy([(o) => OrderingTerm.asc(o.date)]))
       .watch();
+
+  // ── Occasion tags ───────────────────────────────────────────────────────
+
+  Stream<List<OccasionTagRow>> watchOccasionTags() => (select(occasionTags)
+        ..where((t) => t.deletedAt.isNull())
+        ..orderBy([
+          (t) => OrderingTerm.asc(t.sortOrder),
+          (t) => OrderingTerm.asc(t.label),
+        ]))
+      .watch();
+
+  Future<List<OccasionTagRow>> allOccasionTags() => (select(occasionTags)
+        ..where((t) => t.deletedAt.isNull())
+        ..orderBy([
+          (t) => OrderingTerm.asc(t.sortOrder),
+          (t) => OrderingTerm.asc(t.label),
+        ]))
+      .get();
+
+  /// ⚠ INCLUDES SOFT-DELETED ROWS. The seed backfill needs them: a slug the
+  /// user deleted is still taken, and resurrecting it would undo their delete
+  /// on the next launch.
+  Future<List<OccasionTagRow>> allOccasionTagsIncludingDeleted() =>
+      select(occasionTags).get();
+
+  Future<void> upsertOccasionTag(OccasionTagsCompanion row) =>
+      into(occasionTags).insertOnConflictUpdate(row);
+
+  Future<void> updateOccasionTag(String id, OccasionTagsCompanion patch) =>
+      (update(occasionTags)..where((t) => t.id.equals(id)))
+          .write(patch.copyWith(updatedAt: Value(DateTime.now())));
+
+  /// Everything the delete confirm has to be able to name before it asks.
+  Future<(int people, int occasions)> occasionTagUsage(String slug) async {
+    final tagged = (await allPeople())
+        .where((p) => p.occasionTags.contains(slug))
+        .length;
+    final dated =
+        (await allOccasions()).where((o) => o.tag == slug).length;
+    return (tagged, dated);
+  }
+
+  /// Soft-deletes a tag AND everything pointing at it, in one transaction.
+  ///
+  /// ⚠ THE CASCADE IS THE POINT. Deleting the row alone would take the chip
+  /// out of every sheet while its occasions kept their dates and kept firing
+  /// notifications — reminders for a tag the user believes they deleted, with
+  /// nowhere in the UI left to explain them. Money rows keep their
+  /// occasion_tag string: they are a record of what was spent, and history is
+  /// not rewritten by a vocabulary change.
+  Future<void> deleteOccasionTag(String id) async {
+    final now = DateTime.now();
+    await transaction(() async {
+      final row = await (select(occasionTags)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+      if (row == null) return;
+
+      await (update(occasionTags)..where((t) => t.id.equals(id))).write(
+          OccasionTagsCompanion(
+              deletedAt: Value(now), updatedAt: Value(now)));
+
+      await (update(occasions)
+            ..where((o) => o.tag.equals(row.slug) & o.deletedAt.isNull()))
+          .write(OccasionsCompanion(
+              deletedAt: Value(now), updatedAt: Value(now)));
+
+      for (final p in await allPeople()) {
+        if (!p.occasionTags.contains(row.slug)) continue;
+        final kept = p.occasionTags.where((t) => t != row.slug).toList();
+        await (update(people)..where((t) => t.id.equals(p.id))).write(
+            PeopleCompanion(
+                occasionTags: Value(kept), updatedAt: Value(now)));
+      }
+    });
+  }
 
   /// The next occasion for each tag, used by Today and the scheduler.
   Future<List<Occasion>> upcomingOccasions({int withinDays = 400}) async {

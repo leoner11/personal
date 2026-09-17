@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 
 /// One status tone: a dot, a wash, and text. Never guessed from a string —
@@ -160,17 +162,44 @@ abstract final class T {
 /// it was "match the platform's system UI size", and on iOS/Android that is
 /// 17pt. Everything here holds the desktop ratios, scaled.
 ///
+/// TRACKING (session 2, mockup parity): WebKit/Core Text applies SF's
+/// optical tracking automatically — `font-family: -apple-system` tightens as
+/// sizes grow. Flutter applies none of it, which is why the app read looser
+/// than the mockup at title sizes. The values here are the mockup's own CSS
+/// (`letter-spacing` on the 28px navbar title, the 20px sheet title and the
+/// 17px inline title). Body sizes: SF Text tracks ~zero at 15–17px, and the
+/// mockup sets none — leave null. Micro caps keep their per-callsite
+/// tracking, which is a section-head convention, not a title.
+///
 /// The screen title is the one place the phone is bigger than the Mac's 20pt
-/// ceiling: a phone header has no window chrome to signal "new screen", so the
-/// type has to do it alone.
+/// ceiling: a phone header has no window chrome to signal "new screen", so
+/// the type has to do it alone.
 abstract final class PT {
-  static const screenTitle = TextStyle(fontSize: 28, fontWeight: FontWeight.w600);
-  static const entityName = TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
+  static const screenTitle = TextStyle(
+      fontSize: 28, fontWeight: FontWeight.w600, letterSpacing: -0.56);
+  static const entityName = TextStyle(
+      fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: -0.2);
   static const sectionLabel = TextStyle(fontSize: 13, fontWeight: FontWeight.w600);
   static const body = TextStyle(fontSize: 17);
   static const secondary = TextStyle(fontSize: 15);
   static const micro = TextStyle(fontSize: 12, fontWeight: FontWeight.w500);
   static const mono = TextStyle(fontSize: 15, fontFamily: 'Menlo');
+}
+
+/// Phone motion (v2 §3.6). Two curves, owned here so every screen springs
+/// the same way. Press/clear durations are the vocabulary — nothing else
+/// animates. Everything respects prefers-reduced-motion via the framework.
+abstract final class PM {
+  /// Chips, badge ticks, press release: a small overshoot that reads as
+  /// "answered" without ever reading as bouncy.
+  static const Cubic pop = Cubic(0.34, 1.4, 0.64, 1);
+
+  /// Sheets: fast out, slight overshoot at rest — a detent you feel land.
+  static const Cubic sheet = Cubic(0.32, 1.08, 0.36, 1);
+  static const sheetMs = 420;
+  static const pressMs = 120;
+  static const clearMs = 200;
+  static const drawMs = 240;
 }
 
 /// Phone density. ⚠ Nothing interactive may be shorter than [tapMin].
@@ -189,6 +218,10 @@ abstract final class PD {
   static const screenPad = 20.0;
   static const sectionGap = 16.0;
   static const groupGap = 12.0;
+
+  /// The phone's own sheet radius. Desktop parity holds for panels (8),
+  /// controls (6) and tags (4); a sheet is the one surface that earns more.
+  static const sheetRadius = 16.0;
 }
 
 /// Design system density table. Flutter's defaults target touch and will
@@ -208,15 +241,29 @@ abstract final class D {
   static const radiusTag = 4.0;
 }
 
+/// ⚠ Two platform expressions of ONE theme — the fix for diagnosis #1 of
+/// Phone Design v2: a Mac theme used to run on the phone. The desktop keeps
+/// the macOS typography and compact density that make it feel native; the
+/// phone gets its own platform's typography and physics, standard density
+/// (compact reads as cramped at 17pt), and no ink splash — press feedback is
+/// the house spring scale (PM), not a ripple.
 ThemeData buildTheme(Brightness b) {
   final t = b == Brightness.dark ? AppTokens.dark : AppTokens.light;
+  final onPhone = Platform.isIOS || Platform.isAndroid;
+  final platform = !onPhone
+      ? TargetPlatform.macOS
+      : (Platform.isIOS ? TargetPlatform.iOS : TargetPlatform.android);
   return ThemeData(
     useMaterial3: true,
     brightness: b,
     // Leave null so San Francisco resolves natively. Shipping Inter on a Mac
     // app is the tell that it was designed for the web first.
     fontFamily: null,
-    visualDensity: VisualDensity.compact,
+    platform: platform,
+    visualDensity:
+        onPhone ? VisualDensity.standard : VisualDensity.compact,
+    splashFactory:
+        onPhone ? NoSplash.splashFactory : InkSplash.splashFactory,
     scaffoldBackgroundColor: t.canvas,
     canvasColor: t.canvas,
     colorScheme: ColorScheme.fromSeed(
@@ -226,7 +273,7 @@ ThemeData buildTheme(Brightness b) {
     extensions: [t],
     // Tabular figures everywhere, set once. Money columns that jitter as
     // digits change look broken.
-    textTheme: Typography.material2021(platform: TargetPlatform.macOS)
+    textTheme: Typography.material2021(platform: platform)
         .black
         .apply(fontFamily: null)
         .merge(const TextTheme())

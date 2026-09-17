@@ -7,11 +7,13 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 import json
 
-from .models import Person, Occasion, Engagement, Money, Note, Touch, Meeting, Task
+from .models import (Person, Occasion, OccasionTag, Engagement, Money, Note,
+                     Touch, Meeting, Task)
 
 TABLES = {
     "people": Person,
     "occasions": Occasion,
+    "occasion_tags": OccasionTag,
     "engagements": Engagement,
     "money": Money,
     "notes": Note,
@@ -25,7 +27,10 @@ FIELDS = {
     "people": ["name", "company", "wa_number", "wechat_id", "preferred_channel",
                "met_where", "met_when", "notes", "occasion_tags", "ping_date",
                "ping_note", "deleted_at"],
-    "occasions": ["name", "date", "tag", "country", "deleted_at"],
+    "occasions": ["name", "date", "tag", "country", "greeting",
+                  "deleted_at"],
+    "occasion_tags": ["slug", "label", "hint", "greeting", "sort_order",
+                      "built_in", "deleted_at"],
     "engagements": ["name", "type", "counterparty_id", "status", "value_minor",
                     "currency", "notes", "deleted_at"],
     "money": ["date", "direction", "amount_minor", "currency", "label", "status",

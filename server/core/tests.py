@@ -8,7 +8,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from core.auth import hash_token
-from core.models import AuthToken, Person
+from core.models import AuthToken, OccasionTag, Person
 
 SECRET = "deploy-time-secret"
 
@@ -321,3 +321,97 @@ class TaskSyncTests(TestCase):
         rows = json.loads(
             self.client.get("/sync", headers=self.auth).content)["tables"]["tasks"]
         self.assertEqual([r["done_at"] for r in rows], ["2026-09-14T03:00:00+00:00"])
+
+
+class OccasionTagSyncTests(TestCase):
+    """The tag vocabulary rides the same sync as every other table.
+
+    ⚠ IT HAS TO. The tags are what a person's occasion_tags, an occasion's tag
+    and a money row's occasion_tag all point AT, by slug. A vocabulary that
+    stayed on one device would leave the other showing raw slugs it cannot
+    resolve, on chips it cannot offer — the person would be tagged with
+    something the Mac has no way to display or untick."""
+
+    def setUp(self):
+        cache.clear()
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            content_type="application/json",
+        )
+        self.auth = {"authorization": f"Bearer {body(r)['token']}"}
+
+    def push(self, rows):
+        return self.client.post(
+            "/sync",
+            data=json.dumps({"tables": {"occasion_tags": rows}}),
+            content_type="application/json",
+            headers=self.auth,
+        )
+
+    def pull(self):
+        return json.loads(
+            self.client.get("/sync", headers=self.auth).content
+        )["tables"]["occasion_tags"]
+
+    def test_a_tag_round_trips_with_everything_the_chip_needs(self):
+        self.push([{
+            "id": "tag-1", "slug": "hanukkah", "label": "Hanukkah",
+            "hint": "Jewish contacts", "greeting": "Happy Hanukkah!",
+            "sort_order": 9, "built_in": False,
+        }])
+        rows = self.pull()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["slug"], "hanukkah")
+        self.assertEqual(rows[0]["label"], "Hanukkah")
+        self.assertEqual(rows[0]["greeting"], "Happy Hanukkah!")
+        self.assertEqual(rows[0]["sort_order"], 9)
+        self.assertFalse(rows[0]["built_in"])
+
+    def test_a_rename_reaches_the_other_device_without_moving_the_slug(self):
+        # ⚠ The slug is the join key. If a rename changed it, every person
+        # already carrying the tag would detach silently.
+        for label in ("Lebaran / Aidilfitri", "Raya"):
+            self.push([{
+                "id": "tag-2", "slug": "lebaran", "label": label,
+                "built_in": True, "sort_order": 0,
+            }])
+        rows = self.pull()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["label"], "Raya")
+        self.assertEqual(rows[0]["slug"], "lebaran")
+
+    def test_a_deleted_tag_syncs_as_deleted_rather_than_vanishing(self):
+        # A hard delete would leave nothing to tell the other device it is
+        # gone, and the tag would sync straight back on its next push.
+        self.push([{"id": "tag-3", "slug": "guoqing", "label": "National Day"}])
+        self.push([{
+            "id": "tag-3", "slug": "guoqing", "label": "National Day",
+            "deleted_at": "2026-09-17T02:00:00Z",
+        }])
+        rows = self.pull()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["deleted_at"], "2026-09-17T02:00:00+00:00")
+
+    def test_the_two_accounts_can_hold_the_same_seeded_tag_id(self):
+        # Seeded tag ids are a v5 hash of the slug, so they are identical on
+        # every device AND across accounts. Uniqueness is scoped to the owner;
+        # globally unique would make the second user's vocabulary collide with
+        # the first's and vanish.
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": "sri", "password": "a-long-passphrase-2"}),
+            content_type="application/json",
+        )
+        other = {"authorization": f"Bearer {body(r)['token']}"}
+        row = [{"id": "seeded-cny", "slug": "cny", "label": "春节"}]
+
+        self.push(row)
+        self.client.post(
+            "/sync",
+            data=json.dumps({"tables": {"occasion_tags": row}}),
+            content_type="application/json",
+            headers=other,
+        )
+        self.assertEqual(len(self.pull()), 1)
+        self.assertEqual(OccasionTag.objects.filter(client_id="seeded-cny").count(), 2)

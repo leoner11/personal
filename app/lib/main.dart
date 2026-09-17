@@ -6,8 +6,15 @@ import 'package:window_manager/window_manager.dart';
 import 'data/database.dart';
 import 'domain/auth.dart';
 import 'domain/notifications.dart';
+import 'domain/tag_vocab.dart';
 import 'theme/tokens.dart';
+import 'ui/phone/money_screen.dart';
+import 'ui/phone/notes_screen.dart';
+import 'ui/phone/calendar_screen.dart';
+import 'ui/phone/occasion_tag_sheets.dart';
 import 'ui/phone/phone_shell.dart';
+import 'ui/phone/projects_screen.dart';
+import 'ui/phone/tasks_list_screen.dart';
 import 'ui/shell.dart';
 
 /// ⚠ window_manager is desktop-only. Calling ensureInitialized() on a phone
@@ -23,6 +30,14 @@ Future<void> main() async {
   // Seed three years of occasions on first launch, then rebuild every pending
   // notification from scratch. ⚠ Both are load-bearing: an empty calendar and
   // a wiped schedule look identical to a normal quiet day.
+  // ⚠ TAGS BEFORE OCCASIONS. backfillSeedOccasions now refuses to seed dates
+  // for a tag that is not in the table, so seeding the vocabulary second would
+  // skip every festival on a virgin database and leave it permanently empty.
+  await seedBuiltInTags(db);
+  // ⚠ Bound before the first frame: chips and person rows resolve slugs to
+  // labels out of this, and an unbound vocabulary draws every tag as its raw
+  // slug until the first rebuild.
+  TagVocab.bind(db);
   await seedIfEmpty(db);
   // ⚠ And top up anything added to the seed since this database was created.
   // Without it a new occasion tag is visible on the capture screen while the
@@ -136,10 +151,84 @@ class _AppState extends State<App> {
         // action had to work at both ends. They do not.
         home: isDesktop
             ? Shell(db: widget.db)
-            : PhoneShell(
-                db: widget.db,
-                initial:
-                    widget.openOnToday ? PhoneTab.today : PhoneTab.capture,
-              ),
+            : _phoneHome(context),
       );
+
+  /// ⚠ DEBUG HARNESS for unattended simulator screenshots — `simctl` cannot
+  /// tap, so a screenshot pass can neither pick a start tab nor reach a
+  /// pushed screen. `flutter run --dart-define=UI_SCREEN=today` (or people /
+  /// calendar / review / money / notes / projects / tasks / tags / meeting)
+  /// opens that
+  /// directly. ANY OTHER VALUE, OR NONE, IS PRODUCTION: the shell, Capture
+  /// default, notification routing untouched. Tests never set the define.
+  Widget _phoneHome(BuildContext context) {
+    final db = widget.db;
+    switch (const String.fromEnvironment('UI_SCREEN')) {
+      case 'today':
+        return PhoneShell(db: db, initial: PhoneTab.today);
+      case 'people':
+        return PhoneShell(db: db, initial: PhoneTab.people);
+      case 'calendar':
+        return PhoneShell(db: db, initial: PhoneTab.calendar);
+      case 'review':
+        return PhoneShell(db: db, initial: PhoneTab.review);
+      case 'money':
+      case 'notes':
+      case 'projects':
+      case 'tasks':
+      case 'tags':
+        final screen = switch (const String.fromEnvironment('UI_SCREEN')) {
+          'money' => PhoneMoneyScreen(db: db),
+          'notes' => PhoneNotesScreen(db: db),
+          'projects' => PhoneProjectsScreen(db: db),
+          'tags' => PhoneOccasionTagsScreen(db: db),
+          _ => PhoneTasksScreen(db: db),
+        };
+        // The same wrap a Review push gets (see PhoneReviewScreen._push).
+        // ⚠ Builder, not the bare context: _phoneHome runs ABOVE the
+        // MaterialApp, where the token extension does not exist yet.
+        return Builder(
+          builder: (context) => Scaffold(
+            backgroundColor: AppTokens.of(context).canvas,
+            body: SafeArea(top: false, child: screen),
+          ),
+        );
+      case 'meeting':
+        // The meeting sheet, rendered as a page so a screenshot pass can see
+        // it — simctl cannot tap, so the sheet is otherwise unreachable
+        // unattended. First meeting wins; none means the New sheet.
+        return FutureBuilder<Meeting?>(
+          future: db.allMeetings().then((r) => r.isEmpty ? null : r.first),
+          // ⚠ Nothing until the future lands. Building the sheet first and
+          // letting it rebuild reuses the same State, so initState already
+          // ran with existing == null and the sheet never picks the row up.
+          builder: (context, snap) => snap.connectionState !=
+                  ConnectionState.done
+              ? const SizedBox.shrink()
+              : Builder(
+                  builder: (context) => Scaffold(
+                    backgroundColor: AppTokens.of(context).canvas,
+                    body: SafeArea(
+                        top: false,
+                        child:
+                            PhoneMeetingSheet(db: db, existing: snap.data)),
+                  ),
+                ),
+        );
+      case 'note':
+        // The editor is pushed, so it needs a Note row — first one wins.
+        return FutureBuilder<Note?>(
+          future: db.watchNotes().first.then(
+                (rows) => rows.isEmpty ? null : rows.first,
+              ),
+          builder: (context, snap) => snap.hasData && snap.data != null
+              ? PhoneNoteEditor(db: db, note: snap.data!)
+              : const SizedBox.shrink(),
+        );
+    }
+    return PhoneShell(
+      db: db,
+      initial: widget.openOnToday ? PhoneTab.today : PhoneTab.capture,
+    );
+  }
 }

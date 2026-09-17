@@ -27,6 +27,47 @@ enum OccasionTag {
   }
 }
 
+/// Mints the stable key stored on people, occasions and money from a label.
+///
+/// ⚠ MUST BE DETERMINISTIC. Two devices offline, both adding 'Hanukkah', have
+/// to arrive at the same slug — that is what lets seededId('tag:`<slug>`')
+/// collapse them into one row instead of drawing the chip twice.
+///
+/// ⚠ CJK LABELS SLUG TO NOTHING. '中秋节' has no ascii to keep, and an empty
+/// slug would collide with every other CJK tag. Those fall back to a hash of
+/// the label, which is still identical on both devices. The nine built-ins
+/// never come through here at all: they keep their enum names, which is what
+/// spares every existing row a migration.
+String tagSlug(String label) {
+  final ascii = label
+      .toLowerCase()
+      .replaceAll(RegExp(r"[^a-z0-9]+"), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  if (ascii.isNotEmpty) return ascii.length <= 40 ? ascii : ascii.substring(0, 40);
+
+  var h = 0;
+  for (final c in label.trim().runes) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return 'tag-${h.toRadixString(16)}';
+}
+
+/// The built-in vocabulary, as seed rows for the occasion_tags table.
+///
+/// ⚠ THE ENUM IS NO LONGER THE AUTHORITY — this is a seed, exactly like
+/// [kSeedOccasions]. The runtime list of tags is whatever the table holds, so
+/// a user can add Hanukkah, Songkran or Thanksgiving and delete every festival
+/// they will never send. The enum survives only to seed this and to key
+/// [kGreetings], and [OccasionTag.fromId] returns null for a user-made tag,
+/// which every call site already handles.
+///
+/// ⚠ THE SLUG IS THE ENUM NAME. Not derived, not re-slugged. Change one and
+/// every person, occasion and money row carrying it silently detaches.
+List<(String slug, String label, String hint, int order)> get kBuiltInTags => [
+      for (final (i, t) in OccasionTag.values.indexed)
+        (t.name, t.label, t.hint, i),
+    ];
+
 /// ⚠ HARDCODED FOR PHASE 1. 中秋节 2026 = Friday 25 September.
 /// Confirmed as the 15th day of the 8th lunar month.
 /// Phase 3 replaces this with the occasions table, seeded three years out.

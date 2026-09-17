@@ -4,9 +4,11 @@ import '../../data/database.dart';
 import '../../domain/channel.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/occasions.dart';
+import '../../domain/tag_vocab.dart';
 import '../../theme/tokens.dart';
 import '../platform.dart';
 import '../shell.dart';
+import '../widgets/occasion_tag_dialogs.dart';
 import '../widgets/primitives.dart';
 
 /// B2 — the occasion run screen. The reason the app exists.
@@ -163,11 +165,25 @@ class _OccasionsScreenState extends State<OccasionsScreen> {
   }
 
   Widget _run(Occasion o, AppTokens t) {
+    // ⚠ The occasion's own greeting wins (Phase 3): a Thanksgiving tagged
+    // under the New Year audience must not inherit the New Year template.
+    // Only the template path has languages to pick from.
+    // ⚠ THREE LINKS, MOST SPECIFIC FIRST: this occasion's own greeting, then
+    // the tag's default, then the built-in template. The middle link is what
+    // makes a user-defined tag usable at all — 'Hanukkah' has no entry in
+    // kGreetings and never will, so without it every run for a tag the user
+    // invented would open WhatsApp with an empty message box.
+    final custom = o.greeting?.trim().isNotEmpty == true
+        ? o.greeting!.trim()
+        : (TagVocab.bySlug(o.tag)?.greeting?.trim() ?? '');
+    final usesTemplate = custom.isEmpty;
     final tag = OccasionTag.fromId(o.tag);
     final greetings = kGreetings[tag] ?? const {'EN': ''};
-    final langs = greetings.keys.toList();
-    if (!langs.contains(_lang)) _lang = langs.first;
-    final greeting = greetings[_lang] ?? '';
+    // Languages exist only on the template path: a greeting someone typed is
+    // one string, so there is nothing to switch between.
+    final langs = usesTemplate ? greetings.keys.toList() : const <String>[];
+    if (usesTemplate && !langs.contains(_lang)) _lang = langs.first;
+    final greeting = usesTemplate ? (greetings[_lang] ?? '') : custom;
 
     return StreamBuilder<List<Person>>(
       stream: widget.db.watchByTag(o.tag),
@@ -545,9 +561,12 @@ class _OccasionSheetState extends State<OccasionSheet> {
   late final _name = TextEditingController(text: widget.existing?.name ?? '');
   late final _country =
       TextEditingController(text: widget.existing?.country ?? '');
+  late final _greeting =
+      TextEditingController(text: widget.existing?.greeting ?? '');
   late DateTime _date = widget.existing?.date ?? DateTime.now();
-  late OccasionTag _tag =
-      OccasionTag.fromId(widget.existing?.tag ?? '') ?? OccasionTag.newYear;
+  /// A slug from the vocabulary. See [TagVocab.defaultSlug] for why the
+  /// default is newYear-if-present rather than a hardcoded newYear.
+  late String _tag = widget.existing?.tag ?? TagVocab.defaultSlug;
 
   @override
   Widget build(BuildContext context) {
@@ -583,18 +602,37 @@ class _OccasionSheetState extends State<OccasionSheet> {
               Text('TAG',
                   style: T.micro.copyWith(color: t.textMuted, letterSpacing: 0.5)),
               const SizedBox(height: 4),
-              Wrap(spacing: 6, runSpacing: 6, children: [
-                for (final tag in OccasionTag.values)
+              ValueListenableBuilder<List<OccasionTagRow>>(
+                valueListenable: TagVocab.all,
+                builder: (context, _, _) =>
+                    Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final tag in TagVocab.live)
+                    TagChip(
+                        label: tag.label,
+                        selected: _tag == tag.slug,
+                        onTap: () => setState(() => _tag = tag.slug)),
                   TagChip(
-                      label: tag.label,
-                      selected: _tag == tag,
-                      onTap: () => setState(() => _tag = tag)),
-              ]),
+                      label: '+ New tag',
+                      selected: false,
+                      onTap: () async {
+                        final slug =
+                            await NewTagDialog.show(context, widget.db);
+                        if (slug != null) setState(() => _tag = slug);
+                      }),
+                ]),
+              ),
               const SizedBox(height: 4),
               Text('Decides who gets prompted — people carrying this tag.',
                   style: T.secondary.copyWith(color: t.textMuted)),
               const SizedBox(height: 12),
               Field(label: 'Country', controller: _country, hint: 'ID/MY'),
+              const SizedBox(height: 12),
+              // Phase 3: the greeting lives on the occasion. Empty = the
+              // tag's standard template still applies.
+              Field(
+                  label: 'Greeting',
+                  controller: _greeting,
+                  hint: 'Happy Thanksgiving! — empty uses the tag template'),
               const SizedBox(height: 18),
               Row(children: [
                 if (widget.existing != null)
@@ -622,23 +660,27 @@ class _OccasionSheetState extends State<OccasionSheet> {
   }
 
   Future<void> _save() async {
-    final name = _name.text.trim().isEmpty ? _tag.label : _name.text.trim();
+    final name = _name.text.trim().isEmpty
+        ? TagVocab.labelFor(_tag)
+        : _name.text.trim();
     if (widget.existing != null) {
       await (widget.db.update(widget.db.occasions)
             ..where((o) => o.id.equals(widget.existing!.id)))
           .write(OccasionsCompanion(
         name: Value(name),
         date: Value(_date),
-        tag: Value(_tag.name),
+        tag: Value(_tag),
         country: Value(_country.text.trim()),
+        greeting: Value(_greeting.text.trim()),
         updatedAt: Value(DateTime.now()),
       ));
     } else {
       await widget.db.into(widget.db.occasions).insert(OccasionsCompanion.insert(
             name: name,
             date: _date,
-            tag: _tag.name,
+            tag: _tag,
             country: Value(_country.text.trim()),
+            greeting: Value(_greeting.text.trim()),
           ));
     }
     if (mounted) Navigator.pop(context);
