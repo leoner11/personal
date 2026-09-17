@@ -289,16 +289,50 @@ class Tasks extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Sync bookkeeping: one row per synced row, kept OUT of the data tables.
+///
+/// ⚠ WHY A SEPARATE TABLE. Sync used to upload every row of every table on
+/// every run, and the server stamps whatever arrives as newest. So a device
+/// holding a stale copy — the Mac, opened after an edit on the phone — pushed
+/// that copy and silently overwrote the edit. Fixing it needs "has this row
+/// changed here since the server last saw it", per row. Putting that on the
+/// nine data tables would change every data class and every place that builds
+/// one; here it touches nothing but sync.
+///
+/// [dirty] is a COUNTER, not a flag. SQLite triggers (installed in
+/// [AppDatabase.migration]'s beforeOpen) add 1 on every insert or update of a
+/// synced row, so no write site anywhere in the app can forget to mark a
+/// change. Push remembers the value it sent and clears it only if it is still
+/// that value — an edit made while the upload was in flight bumps it, the
+/// clear misses, and the edit goes up next time instead of being lost.
+///
+/// [serverStamp] is the server's updated_at for the version this device holds,
+/// so a pull can skip rows it already has.
+@DataClassName('SyncStateRow')
+class SyncStates extends Table {
+  @override
+  String get tableName => 'sync_state';
+
+  /// The data table's SQL name, which is also its name on the wire.
+  TextColumn get tbl => text()();
+  TextColumn get rowId => text()();
+  IntColumn get dirty => integer().withDefault(const Constant(1))();
+  TextColumn get serverStamp => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {tbl, rowId};
+}
+
 @DriftDatabase(tables: [
   People, Occasions, OccasionTags, Engagements, Money, Notes, Touches,
-  Meetings, Tasks
+  Meetings, Tasks, SyncStates
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'personal_crm'));
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -349,8 +383,59 @@ class AppDatabase extends _$AppDatabase {
           if (from < 8) {
             await m.createTable(occasionTags);
           }
+          // v9 adds per-row sync bookkeeping. Every existing row starts DIRTY,
+          // so the first sync after upgrading uploads everything once — the
+          // same as every sync did before — and only changes after that.
+          // (No shipped build has sync switched on yet, so that one full push
+          // cannot clobber anything.)
+          if (from < 9) {
+            await m.createTable(syncStates);
+            for (final t in syncedTables) {
+              final name = t.actualTableName;
+              // `WHERE true` is required: SQLite cannot otherwise tell an
+              // upsert's ON CONFLICT apart from a join clause after SELECT.
+              await customStatement(
+                  "INSERT INTO sync_state (tbl, row_id, dirty) "
+                  "SELECT '$name', id, 1 FROM $name WHERE true "
+                  "ON CONFLICT (tbl, row_id) DO NOTHING");
+            }
+          }
         },
+        // ⚠ EVERY open, not only on create or upgrade, and idempotent. The
+        // triggers are what make change-tracking impossible to forget, so they
+        // must exist no matter which path built this file — including the v3
+        // rebuild above, which drops tables and their triggers with them.
+        beforeOpen: (_) => installSyncTriggers(),
       );
+
+  /// The tables that sync, in dependency-free order. The single list both the
+  /// triggers and the sync engine are built from, so a table added to one
+  /// cannot be missing from the other.
+  List<TableInfo<Table, Object?>> get syncedTables => [
+        people, occasions, occasionTags, engagements, money, notes, touches,
+        meetings, tasks,
+      ];
+
+  Future<void> installSyncTriggers() async {
+    for (final t in syncedTables) {
+      final name = t.actualTableName;
+      for (final event in ['INSERT', 'UPDATE']) {
+        // ⚠ No condition, deliberately. Rows the sync engine PULLS fire this
+        // too; the engine marks each one clean again straight after writing it
+        // (see markPulled). An earlier draft also switched tracking off during
+        // pulls with a guard table — mutation testing showed it changed
+        // nothing, so it went: one fewer thing that could get stuck.
+        await customStatement('''
+          CREATE TRIGGER IF NOT EXISTS sync_mark_${name}_${event.toLowerCase()}
+          AFTER $event ON $name
+          BEGIN
+            INSERT INTO sync_state (tbl, row_id, dirty)
+            VALUES ('$name', NEW.id, 1)
+            ON CONFLICT (tbl, row_id) DO UPDATE SET dirty = dirty + 1;
+          END''');
+      }
+    }
+  }
 
   /// Everything alive, newest contact first.
   Stream<List<Person>> watchPeople() => (select(people)
@@ -749,4 +834,68 @@ class TimelineEntry {
   final String text;
   /// 'in' | 'out' for money rows, null otherwise.
   final String? direction;
+}
+
+/// What the sync engine needs from the database, and nothing else does.
+extension SyncQueries on AppDatabase {
+  /// id → change counter, for rows changed here since the server last saw them.
+  Future<Map<String, int>> dirtyRows(String tbl) async {
+    final rows = await (select(syncStates)
+          ..where((s) => s.tbl.equals(tbl) & s.dirty.isBiggerThanValue(0)))
+        .get();
+    return {for (final r in rows) r.rowId: r.dirty};
+  }
+
+  Future<Map<String, SyncStateRow>> syncStateFor(
+      String tbl, List<String> ids) async {
+    final out = <String, SyncStateRow>{};
+    // Chunked: SQLite caps bound parameters, and a first sync can carry
+    // every row a device has ever held.
+    for (var i = 0; i < ids.length; i += 500) {
+      final chunk = ids.sublist(i, i + 500 > ids.length ? ids.length : i + 500);
+      final rows = await (select(syncStates)
+            ..where((s) => s.tbl.equals(tbl) & s.rowId.isIn(chunk)))
+          .get();
+      for (final r in rows) {
+        out[r.rowId] = r;
+      }
+    }
+    return out;
+  }
+
+  /// Marks a pushed row clean — ONLY if nothing changed it during the upload.
+  /// Returns whether it was cleared.
+  Future<bool> ackPushed(
+      String tbl, String rowId, int sentDirty, String serverStamp) async {
+    final n = await (update(syncStates)
+          ..where((s) =>
+              s.tbl.equals(tbl) &
+              s.rowId.equals(rowId) &
+              s.dirty.equals(sentDirty)))
+        .write(SyncStatesCompanion(
+            dirty: const Value(0), serverStamp: Value(serverStamp)));
+    return n > 0;
+  }
+
+  /// Records that this device now holds the server's version [serverStamp],
+  /// and that the row is CLEAN.
+  ///
+  /// ⚠ CALL IT AFTER writing the pulled row, never before. Writing the row
+  /// fires the change trigger and marks it dirty; this is what undoes that.
+  /// Reversed, every pulled row would stay dirty and be pushed straight back —
+  /// restamped, pulled by the other device, pushed back again, forever.
+  Future<void> markPulled(String tbl, String rowId, String serverStamp) =>
+      into(syncStates).insertOnConflictUpdate(SyncStatesCompanion.insert(
+        tbl: tbl,
+        rowId: rowId,
+        dirty: const Value(0),
+        serverStamp: Value(serverStamp),
+      ));
+
+  /// Tracking for a row that no longer exists (hard-deleted by a migration or
+  /// a test). Nothing to upload, so stop trying.
+  Future<void> forgetSyncState(String tbl, String rowId) =>
+      (delete(syncStates)
+            ..where((s) => s.tbl.equals(tbl) & s.rowId.equals(rowId)))
+          .go();
 }

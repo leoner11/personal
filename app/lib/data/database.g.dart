@@ -5358,6 +5358,320 @@ class TasksCompanion extends UpdateCompanion<Task> {
   }
 }
 
+class $SyncStatesTable extends SyncStates
+    with TableInfo<$SyncStatesTable, SyncStateRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncStatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _tblMeta = const VerificationMeta('tbl');
+  @override
+  late final GeneratedColumn<String> tbl = GeneratedColumn<String>(
+    'tbl',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rowIdMeta = const VerificationMeta('rowId');
+  @override
+  late final GeneratedColumn<String> rowId = GeneratedColumn<String>(
+    'row_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<int> dirty = GeneratedColumn<int>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _serverStampMeta = const VerificationMeta(
+    'serverStamp',
+  );
+  @override
+  late final GeneratedColumn<String> serverStamp = GeneratedColumn<String>(
+    'server_stamp',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [tbl, rowId, dirty, serverStamp];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_state';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncStateRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('tbl')) {
+      context.handle(
+        _tblMeta,
+        tbl.isAcceptableOrUnknown(data['tbl']!, _tblMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tblMeta);
+    }
+    if (data.containsKey('row_id')) {
+      context.handle(
+        _rowIdMeta,
+        rowId.isAcceptableOrUnknown(data['row_id']!, _rowIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rowIdMeta);
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    if (data.containsKey('server_stamp')) {
+      context.handle(
+        _serverStampMeta,
+        serverStamp.isAcceptableOrUnknown(
+          data['server_stamp']!,
+          _serverStampMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {tbl, rowId};
+  @override
+  SyncStateRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncStateRow(
+      tbl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tbl'],
+      )!,
+      rowId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}row_id'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}dirty'],
+      )!,
+      serverStamp: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}server_stamp'],
+      ),
+    );
+  }
+
+  @override
+  $SyncStatesTable createAlias(String alias) {
+    return $SyncStatesTable(attachedDatabase, alias);
+  }
+}
+
+class SyncStateRow extends DataClass implements Insertable<SyncStateRow> {
+  /// The data table's SQL name, which is also its name on the wire.
+  final String tbl;
+  final String rowId;
+  final int dirty;
+  final String? serverStamp;
+  const SyncStateRow({
+    required this.tbl,
+    required this.rowId,
+    required this.dirty,
+    this.serverStamp,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['tbl'] = Variable<String>(tbl);
+    map['row_id'] = Variable<String>(rowId);
+    map['dirty'] = Variable<int>(dirty);
+    if (!nullToAbsent || serverStamp != null) {
+      map['server_stamp'] = Variable<String>(serverStamp);
+    }
+    return map;
+  }
+
+  SyncStatesCompanion toCompanion(bool nullToAbsent) {
+    return SyncStatesCompanion(
+      tbl: Value(tbl),
+      rowId: Value(rowId),
+      dirty: Value(dirty),
+      serverStamp: serverStamp == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverStamp),
+    );
+  }
+
+  factory SyncStateRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncStateRow(
+      tbl: serializer.fromJson<String>(json['tbl']),
+      rowId: serializer.fromJson<String>(json['rowId']),
+      dirty: serializer.fromJson<int>(json['dirty']),
+      serverStamp: serializer.fromJson<String?>(json['serverStamp']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'tbl': serializer.toJson<String>(tbl),
+      'rowId': serializer.toJson<String>(rowId),
+      'dirty': serializer.toJson<int>(dirty),
+      'serverStamp': serializer.toJson<String?>(serverStamp),
+    };
+  }
+
+  SyncStateRow copyWith({
+    String? tbl,
+    String? rowId,
+    int? dirty,
+    Value<String?> serverStamp = const Value.absent(),
+  }) => SyncStateRow(
+    tbl: tbl ?? this.tbl,
+    rowId: rowId ?? this.rowId,
+    dirty: dirty ?? this.dirty,
+    serverStamp: serverStamp.present ? serverStamp.value : this.serverStamp,
+  );
+  SyncStateRow copyWithCompanion(SyncStatesCompanion data) {
+    return SyncStateRow(
+      tbl: data.tbl.present ? data.tbl.value : this.tbl,
+      rowId: data.rowId.present ? data.rowId.value : this.rowId,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+      serverStamp: data.serverStamp.present
+          ? data.serverStamp.value
+          : this.serverStamp,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncStateRow(')
+          ..write('tbl: $tbl, ')
+          ..write('rowId: $rowId, ')
+          ..write('dirty: $dirty, ')
+          ..write('serverStamp: $serverStamp')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(tbl, rowId, dirty, serverStamp);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncStateRow &&
+          other.tbl == this.tbl &&
+          other.rowId == this.rowId &&
+          other.dirty == this.dirty &&
+          other.serverStamp == this.serverStamp);
+}
+
+class SyncStatesCompanion extends UpdateCompanion<SyncStateRow> {
+  final Value<String> tbl;
+  final Value<String> rowId;
+  final Value<int> dirty;
+  final Value<String?> serverStamp;
+  final Value<int> rowid;
+  const SyncStatesCompanion({
+    this.tbl = const Value.absent(),
+    this.rowId = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.serverStamp = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncStatesCompanion.insert({
+    required String tbl,
+    required String rowId,
+    this.dirty = const Value.absent(),
+    this.serverStamp = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : tbl = Value(tbl),
+       rowId = Value(rowId);
+  static Insertable<SyncStateRow> custom({
+    Expression<String>? tbl,
+    Expression<String>? rowId,
+    Expression<int>? dirty,
+    Expression<String>? serverStamp,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (tbl != null) 'tbl': tbl,
+      if (rowId != null) 'row_id': rowId,
+      if (dirty != null) 'dirty': dirty,
+      if (serverStamp != null) 'server_stamp': serverStamp,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncStatesCompanion copyWith({
+    Value<String>? tbl,
+    Value<String>? rowId,
+    Value<int>? dirty,
+    Value<String?>? serverStamp,
+    Value<int>? rowid,
+  }) {
+    return SyncStatesCompanion(
+      tbl: tbl ?? this.tbl,
+      rowId: rowId ?? this.rowId,
+      dirty: dirty ?? this.dirty,
+      serverStamp: serverStamp ?? this.serverStamp,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (tbl.present) {
+      map['tbl'] = Variable<String>(tbl.value);
+    }
+    if (rowId.present) {
+      map['row_id'] = Variable<String>(rowId.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<int>(dirty.value);
+    }
+    if (serverStamp.present) {
+      map['server_stamp'] = Variable<String>(serverStamp.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncStatesCompanion(')
+          ..write('tbl: $tbl, ')
+          ..write('rowId: $rowId, ')
+          ..write('dirty: $dirty, ')
+          ..write('serverStamp: $serverStamp, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5370,6 +5684,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TouchesTable touches = $TouchesTable(this);
   late final $MeetingsTable meetings = $MeetingsTable(this);
   late final $TasksTable tasks = $TasksTable(this);
+  late final $SyncStatesTable syncStates = $SyncStatesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5384,6 +5699,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     touches,
     meetings,
     tasks,
+    syncStates,
   ];
 }
 
@@ -7964,6 +8280,189 @@ typedef $$TasksTableProcessedTableManager =
       Task,
       PrefetchHooks Function()
     >;
+typedef $$SyncStatesTableCreateCompanionBuilder =
+    SyncStatesCompanion Function({
+      required String tbl,
+      required String rowId,
+      Value<int> dirty,
+      Value<String?> serverStamp,
+      Value<int> rowid,
+    });
+typedef $$SyncStatesTableUpdateCompanionBuilder =
+    SyncStatesCompanion Function({
+      Value<String> tbl,
+      Value<String> rowId,
+      Value<int> dirty,
+      Value<String?> serverStamp,
+      Value<int> rowid,
+    });
+
+class $$SyncStatesTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncStatesTable> {
+  $$SyncStatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get tbl => $composableBuilder(
+    column: $table.tbl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rowId => $composableBuilder(
+    column: $table.rowId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serverStamp => $composableBuilder(
+    column: $table.serverStamp,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncStatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncStatesTable> {
+  $$SyncStatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get tbl => $composableBuilder(
+    column: $table.tbl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rowId => $composableBuilder(
+    column: $table.rowId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serverStamp => $composableBuilder(
+    column: $table.serverStamp,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncStatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncStatesTable> {
+  $$SyncStatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get tbl =>
+      $composableBuilder(column: $table.tbl, builder: (column) => column);
+
+  GeneratedColumn<String> get rowId =>
+      $composableBuilder(column: $table.rowId, builder: (column) => column);
+
+  GeneratedColumn<int> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+
+  GeneratedColumn<String> get serverStamp => $composableBuilder(
+    column: $table.serverStamp,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncStatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncStatesTable,
+          SyncStateRow,
+          $$SyncStatesTableFilterComposer,
+          $$SyncStatesTableOrderingComposer,
+          $$SyncStatesTableAnnotationComposer,
+          $$SyncStatesTableCreateCompanionBuilder,
+          $$SyncStatesTableUpdateCompanionBuilder,
+          (
+            SyncStateRow,
+            BaseReferences<_$AppDatabase, $SyncStatesTable, SyncStateRow>,
+          ),
+          SyncStateRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncStatesTableTableManager(_$AppDatabase db, $SyncStatesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncStatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncStatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncStatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> tbl = const Value.absent(),
+                Value<String> rowId = const Value.absent(),
+                Value<int> dirty = const Value.absent(),
+                Value<String?> serverStamp = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncStatesCompanion(
+                tbl: tbl,
+                rowId: rowId,
+                dirty: dirty,
+                serverStamp: serverStamp,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String tbl,
+                required String rowId,
+                Value<int> dirty = const Value.absent(),
+                Value<String?> serverStamp = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncStatesCompanion.insert(
+                tbl: tbl,
+                rowId: rowId,
+                dirty: dirty,
+                serverStamp: serverStamp,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncStatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncStatesTable,
+      SyncStateRow,
+      $$SyncStatesTableFilterComposer,
+      $$SyncStatesTableOrderingComposer,
+      $$SyncStatesTableAnnotationComposer,
+      $$SyncStatesTableCreateCompanionBuilder,
+      $$SyncStatesTableUpdateCompanionBuilder,
+      (
+        SyncStateRow,
+        BaseReferences<_$AppDatabase, $SyncStatesTable, SyncStateRow>,
+      ),
+      SyncStateRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7986,4 +8485,6 @@ class $AppDatabaseManager {
       $$MeetingsTableTableManager(_db, _db.meetings);
   $$TasksTableTableManager get tasks =>
       $$TasksTableTableManager(_db, _db.tasks);
+  $$SyncStatesTableTableManager get syncStates =>
+      $$SyncStatesTableTableManager(_db, _db.syncStates);
 }
