@@ -22,3 +22,20 @@ bool get kSyncEnabled => syncEnabledFor(kSyncBaseUrl);
 /// Split out so the rule above is testable without rebuilding with a real URL.
 bool syncEnabledFor(String baseUrl) =>
     baseUrl.isNotEmpty && baseUrl.startsWith('https://');
+
+/// The privacy policy, served at `/privacy` by the same server the app syncs
+/// with (server/core/privacy.py).
+///
+/// ⚠ Derived from [kSyncBaseUrl], never configured separately: a second
+/// constant could drift and send people to a policy for a different server
+/// than the one holding their data. No https server means no policy link —
+/// and nothing is collected in that build either.
+Uri? get kPrivacyPolicyUrl => privacyPolicyUrlFor(kSyncBaseUrl);
+
+Uri? privacyPolicyUrlFor(String baseUrl) {
+  if (!syncEnabledFor(baseUrl)) return null;
+  final base = baseUrl.endsWith('/')
+      ? baseUrl.substring(0, baseUrl.length - 1)
+      : baseUrl;
+  return Uri.parse('$base/privacy');
+}

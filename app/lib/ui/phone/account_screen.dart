@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/auth.dart';
+import '../../domain/channel.dart' show openPrivacyPolicy;
 import '../../domain/config.dart';
 import '../../domain/money_fmt.dart' show fmtAgo;
 import '../../domain/sync.dart';
@@ -23,8 +24,13 @@ import 'phone_primitives.dart';
 /// typography, not new furniture) and adds exactly two things: the password
 /// reveal eye, and the quiet sync line on the signed-in card.
 class PhoneAccountScreen extends StatefulWidget {
-  const PhoneAccountScreen({super.key, required this.auth, this.db});
+  const PhoneAccountScreen(
+      {super.key, required this.auth, this.db, this.privacyPolicyUrl});
   final AuthState auth;
+
+  /// Defaults to the server's `/privacy`. Only tests pass one: builds decide
+  /// it from kSyncBaseUrl, which a test cannot change.
+  final Uri? privacyPolicyUrl;
 
   /// Handle for the sync line's last-synced stamp (domain/sync.dart). The
   /// Review hub owns the wiring; null simply means no sync diagnostics.
@@ -204,6 +210,15 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
                     'Leave blank unless the server has closed signup with '
                     'REGISTRATION_SECRET.',
                     style: PT.secondary.copyWith(color: t.textMuted)),
+                // Said BEFORE the account exists: this is the moment the data
+                // starts leaving the device.
+                if (_policyUrl != null) ...[
+                  const SizedBox(height: PD.groupGap),
+                  Text(
+                      'With an account, what you sync is stored on the server. '
+                      'The privacy policy below explains how it is handled.',
+                      style: PT.secondary.copyWith(color: t.textMuted)),
+                ],
               ],
               if (_error != null) ...[
                 const SizedBox(height: PD.groupGap),
@@ -232,11 +247,25 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
                             _error = null;
                           })),
             ],
+            // ⚠ In EVERY state, signed in or not, and last in the list:
+            // findable without being in the way. App Store guideline 5.1.1(i)
+            // expects the policy to be reachable inside an app that makes
+            // accounts, not only on its store page.
+            if (_policyUrl != null) ...[
+              const SizedBox(height: PD.sectionGap),
+              PhoneRow(
+                title: 'Privacy policy',
+                chevron: true,
+                onTap: () => openPrivacyPolicy(_policyUrl),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
+
+  Uri? get _policyUrl => widget.privacyPolicyUrl ?? kPrivacyPolicyUrl;
 }
 
 class _SignedIn extends StatelessWidget {

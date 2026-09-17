@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../domain/auth.dart';
+import '../domain/channel.dart' show openPrivacyPolicy;
 import '../domain/config.dart';
 import '../theme/tokens.dart';
 import 'widgets/primitives.dart';
@@ -13,7 +14,11 @@ import 'widgets/primitives.dart';
 /// to `ui/phone/account_screen.dart` rather than a shared widget. Same reasons
 /// as everywhere else: density, controls and the keyboard map all differ.
 class AccountDialog extends StatefulWidget {
-  const AccountDialog({super.key});
+  const AccountDialog({super.key, this.privacyPolicyUrl});
+
+  /// Defaults to the server's `/privacy`. Only tests pass one: builds decide
+  /// it from kSyncBaseUrl, which a test cannot change.
+  final Uri? privacyPolicyUrl;
 
   static Future<void> show(BuildContext c) =>
       showDialog(context: c, builder: (_) => const AccountDialog());
@@ -31,6 +36,8 @@ class _AccountDialogState extends State<AccountDialog> {
   String? _error;
 
   AuthState? get _auth => appAuth;
+
+  Uri? get _policyUrl => widget.privacyPolicyUrl ?? kPrivacyPolicyUrl;
 
   @override
   void initState() {
@@ -164,6 +171,16 @@ class _AccountDialogState extends State<AccountDialog> {
                       'Leave blank unless the server has closed signup with '
                       'REGISTRATION_SECRET.',
                       style: T.secondary.copyWith(color: t.textMuted)),
+                  // Said BEFORE the account exists: this is the moment the
+                  // data starts leaving the device.
+                  if (_policyUrl != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                        'With an account, what you sync is stored on the '
+                        'server. The privacy policy below explains how it is '
+                        'handled.',
+                        style: T.secondary.copyWith(color: t.textMuted)),
+                  ],
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: 10),
@@ -195,6 +212,17 @@ class _AccountDialogState extends State<AccountDialog> {
                       variant: BtnVariant.primary,
                       onPressed: _canSubmit ? _submit : null),
                 ]),
+              ],
+              // ⚠ In every state, signed in or not (App Store 5.1.1(i)).
+              if (_policyUrl != null) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Btn('Privacy policy',
+                      size: BtnSize.sm,
+                      variant: BtnVariant.ghost,
+                      onPressed: () => openPrivacyPolicy(_policyUrl)),
+                ),
               ],
             ],
           ),

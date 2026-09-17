@@ -608,3 +608,45 @@ class StorageLimitTests(TestCase):
         self.push(self.auth, [self.person(0, notes_len=2500)])
         self.assertEqual(self.push(self.auth, [self.person(1, notes_len=1000)]).status_code, 413)
         self.assertEqual(self.push(self.other, [self.person(9, notes_len=1000)]).status_code, 200)
+
+
+class PrivacyPolicyTests(TestCase):
+    """GET /privacy — the App Store policy URL."""
+
+    @override_settings(PRIVACY_CONTACT_EMAIL="privacy@example.com")
+    def test_anyone_can_read_it_without_an_account(self):
+        r = self.client.get("/privacy")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r["Content-Type"])
+        self.assertContains(r, "Privacy Policy")
+        self.assertContains(r, 'mailto:privacy@example.com')
+
+    @override_settings(PRIVACY_CONTACT_EMAIL="")
+    def test_a_missing_contact_is_loud_not_blank(self):
+        r = self.client.get("/privacy")
+        self.assertEqual(r.status_code, 503)
+        self.assertNotContains(r, "Privacy Policy", status_code=503)
+
+    @override_settings(PRIVACY_CONTACT_EMAIL='"><script>alert(1)</script>')
+    def test_the_contact_setting_cannot_inject_markup(self):
+        self.assertNotContains(self.client.get("/privacy"), "<script>")
+
+    def test_being_public_opens_nothing_else(self):
+        self.assertEqual(self.client.get("/privacy/").status_code, 401)
+        self.assertEqual(self.client.get("/privacyx").status_code, 401)
+        self.assertEqual(self.client.get("/sync").status_code, 401)
+
+    @override_settings(PRIVACY_CONTACT_EMAIL="privacy@example.com")
+    def test_it_claims_nothing_the_server_does_not_do(self):
+        # ⚠ Synced data is encrypted IN TRANSIT only. Until end-to-end
+        # encryption exists, the policy must not suggest that it does.
+        page = self.client.get("/privacy").content.decode().lower()
+        for claim in ("end-to-end", "end to end", "only you can read",
+                      "we can't read", "we cannot read", "zero-knowledge"):
+            self.assertNotIn(claim, page)
+
+    def test_every_synced_table_is_covered_by_the_policy(self):
+        # Add a synced table and this fails until the policy has been re-read.
+        from core.privacy import POLICY_COVERS
+        from core.sync import TABLES
+        self.assertEqual(POLICY_COVERS, set(TABLES))

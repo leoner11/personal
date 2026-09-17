@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Personal</title>
+<style>
+  :root { --bg:#f7f6f2; --text:#1d1f1c; --muted:#5f625c; --line:#e3e1da; --accent:#2f6b4f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161815; --text:#e9e8e3; --muted:#a3a59e; --line:#2c2f2a; --accent:#7fb89a; }
+  }
+  html { background: var(--bg); }
+  body { margin: 0 auto; max-width: 680px; padding: 40px 20px 64px; color: var(--text);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 36px 0 8px; padding-top: 20px; border-top: 1px solid var(--line); }
+  .meta { color: var(--muted); margin: 0 0 24px; }
+  .short { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; }
+  ul { padding-left: 20px; } li { margin: 4px 0; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy</h1>
+<p class="meta">Personal · Effective 18 September 2026</p>
+
+<p>Personal is a personal CRM app for iPhone, Android, Mac and Windows. It is developed by
+Leonard Davidson under the name MJCX Studio (“we”, “us”). This policy explains what happens to your
+information when you use it.</p>
+
+<div class="short">
+<p><strong>The short version.</strong> Personal works entirely on your device, and nothing
+leaves it unless you create an account to sync. If you do, what you sync is sent over an
+encrypted connection and stored on our server so your devices can share it. We don’t show
+ads, we don’t use analytics or tracking, and we don’t sell or share your data. You can
+delete your account and everything synced to it from inside the app at any time.</p>
+</div>
+
+<h2>Without an account</h2>
+<p>Everything you enter — people, notes, tasks and the rest — is stored only on your device.
+None of it is sent to us. Reminders are scheduled on your device too; we don’t use a push
+notification service.</p>
+
+<h2>With an account</h2>
+<p>Creating an account is optional, and is only needed to sync between your devices. When you
+have one, we store:</p>
+<ul>
+  <li><strong>Your account:</strong> your username and your password. Passwords are stored
+    only as a secure one-way hash, never in a form we can read.</li>
+  <li><strong>What you sync:</strong> the people you add (such as names, companies, WhatsApp
+    numbers, WeChat IDs, where and when you met, notes, and which occasions apply to them),
+    occasions and occasion tags, projects, money entries, notes, logged contacts, meetings
+    and tasks.</li>
+  <li><strong>Signed-in devices:</strong> a sign-in token for each device, with a short label
+    such as “iPhone” or “Mac” and when it was last used, so that signing out on one device
+    does not sign out the others.</li>
+  <li><strong>Technical information:</strong> our server records the IP address of requests
+    in its logs, and briefly counts sign-in and sign-up attempts per network to block abuse.</li>
+</ul>
+
+<h2>How it’s protected</h2>
+<p>Everything sent between the app and our server travels over an encrypted connection
+(HTTPS), and the app refuses to sync over an unencrypted one. Sign-in tokens are stored in
+your device’s secure storage (Keychain on Apple devices, Keystore on Android) and only as a
+hash on our server. Access to the server is restricted, and we only access your data to keep
+the service running or when you ask us to.</p>
+
+<h2>What we don’t do</h2>
+<ul>
+  <li>We don’t show ads.</li>
+  <li>We don’t use analytics, crash-reporting or tracking tools.</li>
+  <li>We don’t sell your information, or share it with anyone for their own purposes.</li>
+</ul>
+<p>Your synced data is stored with our hosting provider, DigitalOcean, which runs the servers
+on our behalf. We would only disclose information if the law requires it.</p>
+
+<h2>Features that use other apps</h2>
+<ul>
+  <li><strong>WhatsApp and WeChat:</strong> when you choose to send a message, the app opens
+    WhatsApp with the message filled in, or copies the message for WeChat. We don’t read your
+    chats. Those apps’ own privacy policies apply to what you send there.</li>
+  <li><strong>Calendar:</strong> when you tap “Add to calendar”, your device’s calendar opens
+    a new event for you to confirm. The app never reads your calendar.</li>
+  <li><strong>Notifications:</strong> reminders are created and shown on your device only.</li>
+</ul>
+
+<h2>Information about other people</h2>
+<p>Personal is for keeping track of the people you know, so much of what you store is about
+other people. Please only add information you are entitled to keep, and use it in line with
+the laws that apply to you.</p>
+
+<h2>How long we keep it</h2>
+<ul>
+  <li>Your account and synced data are kept until you delete them.</li>
+  <li>Our server keeps daily backups for 14 days, so deleted data disappears from backups
+    within 14 days.</li>
+  <li>Server logs containing IP addresses are kept for up to 90 days.</li>
+  <li>Sign-in and sign-up attempt counts are held in memory for at most an hour.</li>
+</ul>
+
+<h2>Deleting your data</h2>
+<p>You can delete your account in the app, under Account. This immediately removes your
+account, everything synced to it, and signs out your other devices. Data stored on a device
+stays on that device until you delete it or remove the app.</p>
+<p>You can also email us to ask for a copy of your data, to correct it, or to delete it.</p>
+
+<h2>Children</h2>
+<p>Personal is not directed at children under 13, and we don’t knowingly collect information
+from them.</p>
+
+<h2>Changes to this policy</h2>
+<p>If we change this policy, we will update the date at the top of this page. Changes that
+affect how your synced data is handled will also be noted in the app’s release notes.</p>
+
+<h2>Contact</h2>
+<p>Questions or requests about your privacy:
+<a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a></p>
+
+</body>
+</html>

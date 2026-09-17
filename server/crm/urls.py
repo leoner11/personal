@@ -19,6 +19,7 @@ import os
 from django.urls import path
 
 from core.auth import delete_account, login, logout, me, register
+from core.privacy import privacy
 from core.sync import sync
 
 # ⚠ No /admin. See INSTALLED_APPS in settings.py for why it was removed rather
@@ -32,5 +33,6 @@ urlpatterns = [
     path('auth/logout', logout),
     path('auth/me', me),
     path('auth/delete', delete_account),
+    path('privacy', privacy),
     path('sync', sync),
 ]
