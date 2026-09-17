@@ -62,6 +62,19 @@ def _record_failure(request) -> None:
         pass
 
 
+# ⚠ SIGNUPS ARE COUNTED, NOT ONLY FAILURES. Signup is open to anyone, and the
+# failure throttle above never fires on a successful registration — so without
+# this a script could create accounts without limit, each able to fill its
+# storage cap. Same in-memory, per-worker caveat as above: with two workers the
+# real ceiling is up to twice this. A speed bump, and enough for a script.
+_MAX_SIGNUPS = 5
+_SIGNUP_WINDOW_SECONDS = 3600
+
+
+def _signup_key(request) -> str:
+    return f"signup:{request.META.get('REMOTE_ADDR', '?')}"
+
+
 def _body(request):
     try:
         return json.loads(request.body or b"{}")
@@ -105,6 +118,10 @@ def register(request):
 
     if _too_many(request):
         return JsonResponse({"detail": "too many attempts"}, status=429)
+    if (cache.get(_signup_key(request)) or 0) >= _MAX_SIGNUPS:
+        return JsonResponse(
+            {"detail": "too many new accounts from this network"}, status=429
+        )
 
     data = _body(request)
     if data is None:
@@ -127,6 +144,14 @@ def register(request):
             return JsonResponse({"detail": " ".join(e.messages)}, status=400)
         user = User.objects.create_user(username=username, password=password)
         token = _issue(user, data.get("device", ""))
+
+    # Only a signup that happened counts: a taken username or a weak password
+    # must not use up the allowance of someone trying to get it right.
+    cache.add(_signup_key(request), 0, _SIGNUP_WINDOW_SECONDS)
+    try:
+        cache.incr(_signup_key(request))
+    except ValueError:
+        pass
 
     return JsonResponse({"token": token, "username": user.username}, status=201)
 

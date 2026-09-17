@@ -68,6 +68,7 @@ Future<String> runSyncPulse(BuildContext context, AppDatabase db) async {
     await auth.forgetRejectedToken();
     return 'Sign in again';
   }
+  if (engine.storageFull) return SyncEngine.storageFullLine;
   return at == null ? 'Sync failed — showing local data' : 'Synced just now';
 }
 
@@ -129,7 +130,8 @@ class _PhoneMoneyScreenState extends State<PhoneMoneyScreen> {
       _syncLine = line;
       _syncBad =
           line == 'Sync failed — showing local data' ||
-          line == 'Sign in again';
+          line == 'Sign in again' ||
+          line == SyncEngine.storageFullLine;
     });
   }
 
