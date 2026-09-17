@@ -253,6 +253,25 @@ void main() {
     expect(server.rows['people']!.length, 1);
   });
 
+  test('a full account says so, and keeps its changes for later', () async {
+    await mac.addPerson('Pak Andi');
+    await mac.sync(); // joined and clean
+    final tan = await mac.addPerson('Mr Tan');
+    server.pushStatus = 413;
+
+    expect(await mac.sync(), isNull);
+    // ⚠ A flag the shells show — not a silent retry that looks like bad wifi.
+    expect(mac.engine.storageFull, isTrue);
+    expect((await mac.db.dirtyRows('people')).keys, contains(tan));
+
+    // Room made (or cap raised): the queued change goes up untouched.
+    server.pushStatus = 200;
+    mac.signIn('leonard');
+    expect(await mac.sync(), isNotNull);
+    expect(mac.engine.storageFull, isFalse);
+    expect(server.rows['people']!.keys, contains(tan));
+  });
+
   test('a delete on one device reaches the other', () async {
     final tan = await phone.addPerson('Mr Tan');
     await phone.sync();

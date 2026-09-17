@@ -47,3 +47,13 @@ Future<void> openWeChat() async {
   final uri = Uri.parse('weixin://');
   if (await canLaunchUrl(uri)) await launchUrl(uri);
 }
+
+/// Opens the privacy policy. On a phone it opens in an in-app browser sheet,
+/// so reading it never feels like leaving the app; on the desktop, the default
+/// browser. Returns false if there is nothing to open or the OS refused.
+Future<bool> openPrivacyPolicy(Uri? url) async {
+  if (url == null) return false;
+  final phone = Platform.isIOS || Platform.isAndroid;
+  return launchUrl(url,
+      mode: phone ? LaunchMode.inAppBrowserView : LaunchMode.externalApplication);
+}

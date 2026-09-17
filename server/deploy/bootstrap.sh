@@ -88,6 +88,9 @@ DJANGO_DB_PATH=$DATA_DIR/db.sqlite3
 # once your own account exists — an open endpoint on a public IP will be found
 # and used to create junk accounts, even though they can see nothing of yours.
 REGISTRATION_SECRET=
+# Contact address shown on https://$DOMAIN/privacy. Until it is set, that page
+# answers 503 — the App Store needs it before submission.
+PRIVACY_CONTACT_EMAIL=
 # DJANGO_DEBUG deliberately absent. Present and set to 1, a 500 serves your
 # settings and local variables to whoever triggered it.
 EOF

@@ -106,7 +106,11 @@ class AuthApi {
       401 => 'Wrong username or password.',
       403 => detail ?? 'Registration is closed on this server.',
       409 => 'That username is taken.',
-      429 => 'Too many attempts. Wait a few minutes and try again.',
+      // ⚠ Two different 429s. Signup is capped per network per hour; telling
+      // someone to "wait a few minutes" there sends them back too early.
+      429 => detail == 'too many new accounts from this network'
+          ? 'Too many new accounts from this network. Try again in an hour.'
+          : 'Too many attempts. Wait a few minutes and try again.',
       _ => detail ?? 'The server returned an error (${r.statusCode}).',
     });
   }

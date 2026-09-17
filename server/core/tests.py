@@ -506,3 +506,147 @@ class AccountDeletionTests(TestCase):
 
     def test_only_post(self):
         self.assertEqual(self.client.get("/auth/delete", headers=self.auth).status_code, 405)
+
+
+class SignupLimitTests(TestCase):
+    """Open signup must not mean unlimited signup.
+
+    ⚠ The failure throttle never sees a SUCCESSFUL registration, so before this
+    a script could create accounts without end, each able to fill its cap."""
+
+    def setUp(self):
+        cache.clear()
+
+    def signup(self, username, ip="10.0.0.1", password="a-long-passphrase-1"):
+        return self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": username, "password": password}),
+            content_type="application/json",
+            REMOTE_ADDR=ip,
+        )
+
+    @override_settings(REGISTRATION_SECRET="")
+    def test_the_sixth_account_from_one_network_in_an_hour_is_refused(self):
+        for i in range(5):
+            self.assertEqual(self.signup(f"user{i}").status_code, 201)
+        r = self.signup("user5")
+        self.assertEqual(r.status_code, 429)
+        self.assertIn("new accounts", body(r)["detail"])
+        self.assertFalse(User.objects.filter(username="user5").exists())
+
+    @override_settings(REGISTRATION_SECRET="")
+    def test_another_network_is_unaffected(self):
+        for i in range(5):
+            self.signup(f"user{i}")
+        self.assertEqual(self.signup("elsewhere", ip="10.0.0.2").status_code, 201)
+
+    @override_settings(REGISTRATION_SECRET="")
+    def test_a_failed_signup_does_not_use_up_the_allowance(self):
+        # Someone fumbling a taken name or a weak password is not abuse.
+        self.signup("taken")
+        for _ in range(6):
+            self.assertEqual(self.signup("taken").status_code, 409)
+        for i in range(4):
+            self.assertEqual(self.signup(f"ok{i}").status_code, 201)
+
+
+@override_settings(REGISTRATION_SECRET="", ACCOUNT_STORAGE_LIMIT_BYTES=3000)
+class StorageLimitTests(TestCase):
+    """The per-account cap — here shrunk to 3000 so rows can reach it."""
+
+    def setUp(self):
+        cache.clear()
+        self.auth = self.register("leonard", "10.0.0.1")
+        self.other = self.register("sri", "10.0.0.2")
+
+    def register(self, username, ip):
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"username": username, "password": "a-long-passphrase-1"}),
+            content_type="application/json",
+            REMOTE_ADDR=ip,
+        )
+        return {"authorization": f"Bearer {body(r)['token']}"}
+
+    def push(self, headers, people):
+        return self.client.post(
+            "/sync",
+            data=json.dumps({"tables": {"people": people}}),
+            content_type="application/json",
+            headers=headers,
+        )
+
+    def person(self, i, notes_len=0, **extra):
+        return {"id": f"p{i}", "name": f"Person {i}", "notes": "x" * notes_len, **extra}
+
+    def test_normal_use_is_nowhere_near_it(self):
+        r = self.push(self.auth, [self.person(i) for i in range(5)])
+        self.assertEqual(r.status_code, 200)
+
+    def test_a_push_that_would_cross_it_is_refused_whole(self):
+        self.push(self.auth, [self.person(0, notes_len=1500)])
+        r = self.push(self.auth, [self.person(1), self.person(2, notes_len=2000)])
+        self.assertEqual(r.status_code, 413)
+        # ⚠ All or nothing: p1 fit on its own, and must not have been written.
+        self.assertEqual(
+            sorted(Person.objects.filter(owner__username="leonard")
+                   .values_list("client_id", flat=True)), ["p0"])
+
+    def test_a_full_account_can_still_edit_and_delete(self):
+        # ⚠ Counting every pushed row as new would lock a full account out of
+        # the very edits that make room.
+        self.push(self.auth, [self.person(0, notes_len=2500)])
+        same_size = self.push(self.auth, [self.person(0, notes_len=2500)])
+        self.assertEqual(same_size.status_code, 200)
+        smaller = self.push(self.auth, [self.person(0, notes_len=10)])
+        self.assertEqual(smaller.status_code, 200)
+        self.push(self.auth, [self.person(0, notes_len=2500)])
+        tombstone = self.push(self.auth, [{"id": "p0", "deleted_at": "2026-09-18T00:00:00Z"}])
+        self.assertEqual(tombstone.status_code, 200)
+
+    def test_one_account_filling_up_does_not_touch_another(self):
+        self.push(self.auth, [self.person(0, notes_len=2500)])
+        self.assertEqual(self.push(self.auth, [self.person(1, notes_len=1000)]).status_code, 413)
+        self.assertEqual(self.push(self.other, [self.person(9, notes_len=1000)]).status_code, 200)
+
+
+class PrivacyPolicyTests(TestCase):
+    """GET /privacy — the App Store policy URL."""
+
+    @override_settings(PRIVACY_CONTACT_EMAIL="privacy@example.com")
+    def test_anyone_can_read_it_without_an_account(self):
+        r = self.client.get("/privacy")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r["Content-Type"])
+        self.assertContains(r, "Privacy Policy")
+        self.assertContains(r, 'mailto:privacy@example.com')
+
+    @override_settings(PRIVACY_CONTACT_EMAIL="")
+    def test_a_missing_contact_is_loud_not_blank(self):
+        r = self.client.get("/privacy")
+        self.assertEqual(r.status_code, 503)
+        self.assertNotContains(r, "Privacy Policy", status_code=503)
+
+    @override_settings(PRIVACY_CONTACT_EMAIL='"><script>alert(1)</script>')
+    def test_the_contact_setting_cannot_inject_markup(self):
+        self.assertNotContains(self.client.get("/privacy"), "<script>")
+
+    def test_being_public_opens_nothing_else(self):
+        self.assertEqual(self.client.get("/privacy/").status_code, 401)
+        self.assertEqual(self.client.get("/privacyx").status_code, 401)
+        self.assertEqual(self.client.get("/sync").status_code, 401)
+
+    @override_settings(PRIVACY_CONTACT_EMAIL="privacy@example.com")
+    def test_it_claims_nothing_the_server_does_not_do(self):
+        # ⚠ Synced data is encrypted IN TRANSIT only. Until end-to-end
+        # encryption exists, the policy must not suggest that it does.
+        page = self.client.get("/privacy").content.decode().lower()
+        for claim in ("end-to-end", "end to end", "only you can read",
+                      "we can't read", "we cannot read", "zero-knowledge"):
+            self.assertNotIn(claim, page)
+
+    def test_every_synced_table_is_covered_by_the_policy(self):
+        # Add a synced table and this fails until the policy has been re-read.
+        from core.privacy import POLICY_COVERS
+        from core.sync import TABLES
+        self.assertEqual(POLICY_COVERS, set(TABLES))

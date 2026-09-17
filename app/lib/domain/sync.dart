@@ -206,6 +206,10 @@ class SyncEngine {
       unauthorized = true;
       return false;
     }
+    if (res.statusCode == 413) {
+      storageFull = true;
+      return false;
+    }
     if (res.statusCode != 200) return false;
 
     // The server answers with every row it stamped. Adopt ITS stamp — the pull
@@ -234,6 +238,16 @@ class SyncEngine {
   /// never accept us, which is exactly the armed-and-dead state this project
   /// keeps having to design against.
   bool unauthorized = false;
+
+  /// Set when the server refuses an upload because this account has reached
+  /// its storage cap. ⚠ Must be SHOWN, not retried quietly: every later sync
+  /// would fail the same way, new changes would stay on this device only, and
+  /// the footer would look like an ordinary flaky connection. Reading and
+  /// shrinking still work; only growth is refused.
+  bool storageFull = false;
+
+  /// What to say when [storageFull] is set. One wording for both shells.
+  static const storageFullLine = 'Sync storage full — new changes stay on this device';
 
   Future<String?> _pull(String? since) async {
     final reach = _reachBack(since);

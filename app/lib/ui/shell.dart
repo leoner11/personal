@@ -340,6 +340,13 @@ class _SyncLineState extends State<_SyncLine> {
       return;
     }
     if (!mounted) return;
+    if (engine.storageFull) {
+      setState(() {
+        _label = SyncEngine.storageFullLine;
+        _stale = true;
+      });
+      return;
+    }
     if (at != null) {
       setState(() {
         _label = 'Synced ${fmtAgo(at)}';

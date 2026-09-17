@@ -185,5 +185,19 @@ MAILERS = {
 # IP will be found and used to create junk accounts even if they see nothing.
 REGISTRATION_SECRET = os.environ.get("REGISTRATION_SECRET", "")
 
+# Where people write about their data. Required for /privacy to serve the
+# policy; kept out of the repository, which is public.
+PRIVACY_CONTACT_EMAIL = os.environ.get("PRIVACY_CONTACT_EMAIL", "")
+
+# ⚠ PER-ACCOUNT STORAGE CAP, because signup is open to anyone. Not a limit on
+# real use — the app stores text only, and a real account with a year of notes
+# is tens of kilobytes. It exists so one abusive account cannot fill the disk:
+# a $4 droplet has 10GB, and the daily backup keeps 14 copies of the database,
+# so every byte stored can cost ~15 on disk. Measured in characters of stored
+# text plus a fixed cost per row (core/sync.account_size). 0 = no cap.
+ACCOUNT_STORAGE_LIMIT_BYTES = int(
+    os.environ.get("ACCOUNT_STORAGE_LIMIT_BYTES", str(100 * 1000 * 1000))
+)
+
 # SQLite: backups are `scp` on one file. No scale argument at one user.
 USE_TZ = True

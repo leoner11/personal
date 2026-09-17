@@ -123,6 +123,16 @@ void main() {
       expect(await messageFor(429), contains('Too many attempts'));
     });
 
+    test('a signup refused for too many new accounts says to wait an hour',
+        () async {
+      final auth = stateWith(
+          json(429, {'detail': 'too many new accounts from this network'}));
+      await expectLater(
+          auth.register(username: 'x', password: 'pw', device: 'Mac'),
+          throwsA(isA<AuthException>().having(
+              (e) => e.message, 'message', contains('Try again in an hour'))));
+    });
+
     test('409 says the username is taken', () async {
       expect(await messageFor(409), contains('username is taken'));
     });

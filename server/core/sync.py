@@ -1,7 +1,10 @@
 """Two endpoints. Single user, two devices. All the horror of sync is
 concurrent edits by DIFFERENT PEOPLE — that does not apply here, so
 last-write-wins is genuinely correct and the whole thing is ~150 lines."""
+from django.conf import settings
 from django.db import transaction
+from django.db.models import Count, Sum
+from django.db.models.functions import Length
 from django.http import JsonResponse
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
@@ -47,6 +50,64 @@ DATETIME_FIELDS = {"met_when", "ping_date", "date", "starts_at", "due_date",
                    "done_at", "created_at", "deleted_at"}
 
 
+# A fixed allowance per row for what is not text — ids, dates, numbers, and the
+# row itself. Generous on purpose: undercounting is what would let an account
+# grow past the cap in rows that are nearly empty.
+ROW_OVERHEAD = 200
+
+
+def _text_fields(table):
+    model = TABLES[table]
+    return ["client_id"] + [
+        f for f in FIELDS[table]
+        if model._meta.get_field(f).get_internal_type() in ("CharField", "TextField")
+    ]
+
+
+def account_size(user):
+    """What an account stores, in the units the cap is set in."""
+    total = 0
+    for table, model in TABLES.items():
+        fields = _text_fields(table)
+        agg = model.objects.filter(owner=user).aggregate(
+            n=Count("pk"), **{f"len_{f}": Sum(Length(f)) for f in fields}
+        )
+        total += agg.pop("n") * ROW_OVERHEAD + sum(v or 0 for v in agg.values())
+    return total
+
+
+def _row_size(table, values):
+    return ROW_OVERHEAD + sum(len(str(values.get(f) or "")) for f in _text_fields(table))
+
+
+def _growth(user, tables):
+    """How much a push would ADD, net of the rows it replaces.
+
+    ⚠ Net, not gross. Editing or deleting a row at the cap must still work —
+    counting every pushed row as new would lock a full account out of the very
+    edits that shrink it. A field the push leaves out keeps its stored value
+    (update_or_create only writes what arrives), so it keeps its stored size."""
+    growth = 0
+    for table, rows in tables.items():
+        if table not in TABLES:
+            continue
+        fields = _text_fields(table)
+        ids = [r.get("id") for r in rows if isinstance(r, dict) and r.get("id")]
+        stored = {
+            o["client_id"]: o
+            for o in TABLES[table].objects.filter(owner=user, client_id__in=ids)
+            .values(*fields)
+        }
+        for row in rows:
+            if not isinstance(row, dict) or not row.get("id"):
+                continue
+            old = stored.get(row["id"])
+            merged = {f: (row["id"] if f == "client_id" else row[f] if f in row
+                          else (old or {}).get(f)) for f in fields}
+            growth += _row_size(table, merged) - (_row_size(table, old) if old else 0)
+    return growth
+
+
 def _serialize(obj, table):
     # ⚠ client_id goes out as "id". The clients have always spoken "id" and the
     # rename is a server-side storage detail — see SyncedModel.client_id.
@@ -83,8 +144,21 @@ def push(request):
     payload = json.loads(request.body or "{}")
     stamped = {}
 
+    # ⚠ Checked BEFORE writing anything, and all-or-nothing. A batch that would
+    # cross the cap is refused whole: half-applying it would leave the other
+    # device holding rows that reference rows the server never took.
+    limit = settings.ACCOUNT_STORAGE_LIMIT_BYTES
+    tables = payload.get("tables") or {}
+    if limit:
+        growth = _growth(request.user, tables)
+        if growth > 0 and account_size(request.user) + growth > limit:
+            return JsonResponse(
+                {"detail": "storage limit reached", "limit_bytes": limit},
+                status=413,
+            )
+
     with transaction.atomic():
-        for table, rows in (payload.get("tables") or {}).items():
+        for table, rows in tables.items():
             model = TABLES.get(table)
             if not model:
                 continue
