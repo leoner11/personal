@@ -61,4 +61,45 @@ void main() {
     expect(find.text('EMAIL'), findsOneWidget);
     expect(find.text('USERNAME'), findsNothing);
   });
+
+  testWidgets('signed in, the same line still opens the panel', (tester) async {
+    // ⚠ It used to SYNC on click once signed in, leaving Sign out and Delete
+    // account reachable only by right-click. Nobody finds a right-click.
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final auth = AuthState(store: _SignedInStore());
+    await auth.load();
+    appAuth = auth;
+    addTearDown(() => appAuth = null);
+
+    await tester.pumpWidget(
+        MaterialApp(theme: buildTheme(Brightness.light), home: Shell(db: db)));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.textContaining(RegExp('Synced|Never synced')).first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.text('Delete account…'), findsOneWidget);
+  });
+}
+
+class _SignedInStore implements TokenStore {
+  @override
+  Future<String?> token() async => 'tok-1';
+  @override
+  Future<String?> username() async => 'leonard@example.com';
+  @override
+  Future<void> save(String t, String u) async {}
+  @override
+  Future<void> clear() async {}
 }

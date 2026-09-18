@@ -292,7 +292,7 @@ class _SyncLineState extends State<_SyncLine> {
   }
 
   Future<void> _open() async {
-    await AccountDialog.show(context);
+    await AccountDialog.show(context, onSyncNow: _canSync ? _run : null);
   }
 
   /// True while the combine-or-replace dialog is up. Sync runs on every auth
@@ -371,9 +371,11 @@ class _SyncLineState extends State<_SyncLine> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        // ⚠ Always tappable now. When it says "Local only" the useful action
-        // is opening the account panel, not retrying a sync that cannot run.
-        onTap: _canSync ? _run : _open,
+        // ⚠ ALWAYS OPENS THE PANEL. It used to sync on click once signed in,
+        // which left Sign out and Delete account reachable only by
+        // right-click — nobody finds that. Syncing now lives on a button
+        // inside the panel, where the account actions already are.
+        onTap: _open,
         onSecondaryTap: _open,
         child: Text(label,
             style: T.micro.copyWith(

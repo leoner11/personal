@@ -14,14 +14,19 @@ import 'widgets/primitives.dart';
 /// to `ui/phone/account_screen.dart` rather than a shared widget. Same reasons
 /// as everywhere else: density, controls and the keyboard map all differ.
 class AccountDialog extends StatefulWidget {
-  const AccountDialog({super.key, this.privacyPolicyUrl});
+  const AccountDialog({super.key, this.privacyPolicyUrl, this.onSyncNow});
+
+  /// Runs a sync. Null when there is nothing to sync with (no server, or
+  /// signed out), and the button is then not shown.
+  final VoidCallback? onSyncNow;
 
   /// Defaults to the server's `/privacy`. Only tests pass one: builds decide
   /// it from kSyncBaseUrl, which a test cannot change.
   final Uri? privacyPolicyUrl;
 
-  static Future<void> show(BuildContext c) =>
-      showDialog(context: c, builder: (_) => const AccountDialog());
+  static Future<void> show(BuildContext c, {VoidCallback? onSyncNow}) =>
+      showDialog(
+          context: c, builder: (_) => AccountDialog(onSyncNow: onSyncNow));
 
   @override
   State<AccountDialog> createState() => _AccountDialogState();
@@ -150,19 +155,29 @@ class _AccountDialogState extends State<AccountDialog> {
                     'stays on this Mac, and your phone stays signed in.',
                     style: T.secondary.copyWith(color: t.textMuted)),
                 const SizedBox(height: 16),
-                Row(children: [
+                // ⚠ Wrap, not Row: four buttons do not fit 420pt across, and
+                // a Row clips the last one against the edge — the same way
+                // "Create account" was clipped before.
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  if (widget.onSyncNow != null)
+                    Btn('Sync now', onPressed: () {
+                      widget.onSyncNow!();
+                      Navigator.pop(context);
+                    }),
                   Btn('Sign out', onPressed: auth.logout),
-                  const SizedBox(width: 8),
                   // ⚠ Ghost, never filled: the house has no filled danger
                   // button, and the dialog behind it asks for the password.
                   Btn('Delete account…',
                       variant: BtnVariant.ghost,
                       onPressed: () => DeleteAccountDialog.show(context, auth)),
-                  const Spacer(),
-                  Btn('Close',
+                ]),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Btn('Close',
                       variant: BtnVariant.primary,
                       onPressed: () => Navigator.pop(context)),
-                ]),
+                ),
               ] else ...[
                 // ⚠ THE MODE IS STATED, not implied by a button label. The
                 // ghost button below only SWITCHES modes, and when the only
