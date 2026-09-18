@@ -28,7 +28,7 @@ class AccountDialog extends StatefulWidget {
 }
 
 class _AccountDialogState extends State<AccountDialog> {
-  final _username = TextEditingController();
+  final _email = TextEditingController();
   final _password = TextEditingController();
   final _secret = TextEditingController();
   bool _registering = false;
@@ -43,7 +43,7 @@ class _AccountDialogState extends State<AccountDialog> {
   void initState() {
     super.initState();
     _auth?.addListener(_onAuth);
-    for (final c in [_username, _password, _secret]) {
+    for (final c in [_email, _password, _secret]) {
       c.addListener(() => setState(() {}));
     }
   }
@@ -55,7 +55,7 @@ class _AccountDialogState extends State<AccountDialog> {
   @override
   void dispose() {
     _auth?.removeListener(_onAuth);
-    _username.dispose();
+    _email.dispose();
     _password.dispose();
     _secret.dispose();
     super.dispose();
@@ -63,7 +63,9 @@ class _AccountDialogState extends State<AccountDialog> {
 
   bool get _canSubmit =>
       !_busy &&
-      _username.text.trim().isNotEmpty &&
+      // ⚠ A loose check, not a gate: the server decides what a valid address
+      // is, and a legal-but-unusual one must still get through.
+      looksLikeEmail(_email.text) &&
       // ⚠ Optional: most servers leave signup open.
       _password.text.isNotEmpty;
 
@@ -77,14 +79,14 @@ class _AccountDialogState extends State<AccountDialog> {
     try {
       if (_registering) {
         await auth.register(
-          username: _username.text.trim(),
+          email: _email.text.trim(),
           password: _password.text,
           device: 'Mac',
           registrationSecret: _secret.text.trim(),
         );
       } else {
         await auth.login(
-          username: _username.text.trim(),
+          email: _email.text.trim(),
           password: _password.text,
           device: 'Mac',
         );
@@ -128,7 +130,7 @@ class _AccountDialogState extends State<AccountDialog> {
                 Text('Auth is unavailable.',
                     style: T.secondary.copyWith(color: t.textSecondary))
               else if (auth.signedIn) ...[
-                Text('Signed in as ${auth.username}',
+                Text('Signed in as ${auth.email}',
                     style: T.body.copyWith(color: t.textPrimary)),
                 const SizedBox(height: 2),
                 Text(kSyncBaseUrl,
@@ -160,7 +162,7 @@ class _AccountDialogState extends State<AccountDialog> {
                     'The app works fully without it.',
                     style: T.secondary.copyWith(color: t.textSecondary)),
                 const SizedBox(height: 14),
-                Field(label: 'Username', controller: _username),
+                Field(label: 'Email', controller: _email),
                 const SizedBox(height: 10),
                 _PasswordField(label: 'Password', controller: _password),
                 if (_registering) ...[
@@ -293,7 +295,7 @@ class DeleteAccountDialogState extends State<DeleteAccountDialog> {
   @override
   Widget build(BuildContext context) {
     final t = AppTokens.of(context);
-    final name = widget.auth.username ?? 'this account';
+    final name = widget.auth.email ?? 'this account';
     return Dialog(
       backgroundColor: t.canvas,
       shape: RoundedRectangleBorder(

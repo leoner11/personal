@@ -41,7 +41,7 @@ class PhoneAccountScreen extends StatefulWidget {
 }
 
 class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
-  final _username = TextEditingController();
+  final _email = TextEditingController();
   final _password = TextEditingController();
   final _secret = TextEditingController();
   bool _registering = false;
@@ -62,7 +62,7 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
   void initState() {
     super.initState();
     widget.auth.addListener(_onAuth);
-    for (final c in [_username, _password, _secret]) {
+    for (final c in [_email, _password, _secret]) {
       c.addListener(() => setState(() {}));
     }
     _loadSync();
@@ -87,7 +87,7 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
     final at = await SyncEngine(db,
             baseUrl: kSyncBaseUrl,
             token: widget.auth.token ?? '',
-            account: widget.auth.username ?? '')
+            account: widget.auth.email ?? '')
         .lastSynced();
     if (mounted) {
       setState(() {
@@ -100,7 +100,7 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
   @override
   void dispose() {
     widget.auth.removeListener(_onAuth);
-    _username.dispose();
+    _email.dispose();
     _password.dispose();
     _secret.dispose();
     super.dispose();
@@ -110,7 +110,9 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
 
   bool get _canSubmit =>
       !_busy &&
-      _username.text.trim().isNotEmpty &&
+      // ⚠ A loose check, not a gate: the server decides what a valid address
+      // is, and a legal-but-unusual one must still get through.
+      looksLikeEmail(_email.text) &&
       // ⚠ The secret is NOT required — most servers leave signup open. Making
       // it mandatory here would block registration against every one of them.
       _password.text.isNotEmpty;
@@ -123,14 +125,14 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
     try {
       if (_registering) {
         await widget.auth.register(
-          username: _username.text.trim(),
+          email: _email.text.trim(),
           password: _password.text,
           device: _device,
           registrationSecret: _secret.text.trim(),
         );
       } else {
         await widget.auth.login(
-          username: _username.text.trim(),
+          email: _email.text.trim(),
           password: _password.text,
           device: _device,
         );
@@ -192,8 +194,11 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
                   style: PT.secondary.copyWith(color: t.textSecondary)),
               const SizedBox(height: PD.sectionGap),
               PhoneField(
-                  label: 'Username',
-                  controller: _username,
+                  label: 'Email',
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  enableSuggestions: false,
                   textCapitalization: TextCapitalization.none),
               const SizedBox(height: PD.groupGap),
               _PasswordField(controller: _password, reveal: _reveal,
@@ -309,7 +314,7 @@ class _SignedIn extends StatelessWidget {
                   style: PT.micro
                       .copyWith(color: t.textMuted, letterSpacing: 0.5)),
               const SizedBox(height: 6),
-              Text(auth.username ?? '—',
+              Text(auth.email ?? '—',
                   style: PT.entityName.copyWith(color: t.textPrimary)),
               const SizedBox(height: 6),
               Text(kSyncBaseUrl,
@@ -396,7 +401,7 @@ class PhoneDeleteAccountSheetState extends State<PhoneDeleteAccountSheet> {
   @override
   Widget build(BuildContext context) {
     final t = AppTokens.of(context);
-    final name = widget.auth.username ?? 'this account';
+    final name = widget.auth.email ?? 'this account';
     return PhoneSheet(
       title: 'Delete $name?',
       actions: Row(children: [

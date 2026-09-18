@@ -12,7 +12,7 @@ import 'package:personal_crm/ui/phone/phone_primitives.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _Store implements TokenStore {
-  String? t = 'tok-1', u = 'leonard';
+  String? t = 'tok-1', u = 'leonard@example.com';
   @override
   Future<String?> token() async => t;
   @override
@@ -92,7 +92,7 @@ void main() {
       final a = await auth(200);
       await host(tester, (_) => opener(a));
 
-      expect(find.text('Delete leonard?'), findsOneWidget);
+      expect(find.text('Delete leonard@example.com?'), findsOneWidget);
       expect(find.textContaining('cannot be undone'), findsOneWidget);
       expect(find.textContaining('The data on this phone stays on this phone'),
           findsOneWidget);
@@ -116,7 +116,7 @@ void main() {
       expect(deleteCalls, 1);
       expect(find.text('That password is not right. Nothing was deleted.'),
           findsOneWidget);
-      expect(find.text('Delete leonard?'), findsOneWidget);
+      expect(find.text('Delete leonard@example.com?'), findsOneWidget);
       expect(a.signedIn, isTrue);
     });
 
@@ -130,7 +130,7 @@ void main() {
       await beat(tester);
 
       expect(a.signedIn, isFalse);
-      expect(find.text('Delete leonard?'), findsNothing);
+      expect(find.text('Delete leonard@example.com?'), findsNothing);
     });
   });
 
@@ -148,7 +148,7 @@ void main() {
               ),
           desktop: true);
 
-      expect(find.text('Delete the account leonard?'), findsOneWidget);
+      expect(find.text('Delete the account leonard@example.com?'), findsOneWidget);
       expect(find.textContaining('The data on this Mac stays on this Mac'),
           findsOneWidget);
       await tester.tap(find.text('Delete account'));
@@ -158,7 +158,7 @@ void main() {
       // Not dismissible by a stray click outside.
       await tester.tapAt(const Offset(5, 5));
       await beat(tester);
-      expect(find.text('Delete the account leonard?'), findsOneWidget);
+      expect(find.text('Delete the account leonard@example.com?'), findsOneWidget);
     });
   });
 }

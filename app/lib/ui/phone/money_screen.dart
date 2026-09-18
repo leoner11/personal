@@ -46,7 +46,7 @@ Future<String> runSyncPulse(BuildContext context, AppDatabase db) async {
     return 'Not signed in — local only';
   }
   final engine = SyncEngine(db,
-      baseUrl: kSyncBaseUrl, token: token, account: auth.username ?? '');
+      baseUrl: kSyncBaseUrl, token: token, account: auth.email ?? '');
   var at = await engine.run();
 
   // ⚠ This device and the account both hold data. Nothing synced; ask here,

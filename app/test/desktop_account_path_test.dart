@@ -54,5 +54,9 @@ void main() {
     // The panel that can both sign in and create an account.
     expect(find.text('Create an account'), findsOneWidget);
     expect(find.text('Privacy policy'), findsOneWidget);
+
+    // Accounts are identified by email, and the form says so.
+    expect(find.text('EMAIL'), findsOneWidget);
+    expect(find.text('USERNAME'), findsNothing);
   });
 }

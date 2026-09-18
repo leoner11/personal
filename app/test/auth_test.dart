@@ -51,24 +51,46 @@ void main() {
             headers: {'content-type': 'application/json'});
       });
 
+  group('the email check in the app', () {
+    // ⚠ Loose ON PURPOSE. It exists to catch a typo before a round trip; the
+    // server decides what is valid, so anything legal-but-odd must pass here.
+    test('obvious typos are caught', () {
+      for (final bad in ['leonard', 'leonard@', '@example.com', 'a@b.c d', '']) {
+        expect(looksLikeEmail(bad), isFalse, reason: bad);
+      }
+    });
+
+    test('ordinary and awkward real addresses pass', () {
+      for (final ok in [
+        'leonard@mjcxstudio.com',
+        'leonard+crm@mjcxstudio.com',
+        "o'brien@example.co.uk",
+        'LEONARD@Example.COM',
+        '  leonard@example.com  ',
+      ]) {
+        expect(looksLikeEmail(ok), isTrue, reason: ok);
+      }
+    });
+  });
+
   group('signing in', () {
     test('a token is kept and the state reports signed in', () async {
-      final auth = stateWith(json(200, {'token': 'tok-1', 'username': 'leonard'}));
-      await auth.login(username: 'leonard', password: 'pw', device: 'Mac');
+      final auth = stateWith(json(200, {'token': 'tok-1', 'email': 'leonard@example.com'}));
+      await auth.login(email: 'leonard@example.com', password: 'pw', device: 'Mac');
 
       expect(auth.signedIn, isTrue);
-      expect(auth.username, 'leonard');
+      expect(auth.email, 'leonard@example.com');
       expect(await store.token(), 'tok-1');
     });
 
     test('the password is never written to storage', () async {
       // ⚠ Only the token is persisted. A stored password is a password that
       // can be stolen, and the server never needs it again.
-      final auth = stateWith(json(200, {'token': 'tok-1', 'username': 'leonard'}));
+      final auth = stateWith(json(200, {'token': 'tok-1', 'email': 'leonard@example.com'}));
       await auth.login(
-          username: 'leonard', password: 'hunter2-is-a-secret', device: 'Mac');
+          email: 'leonard@example.com', password: 'hunter2-is-a-secret', device: 'Mac');
       expect(await store.token(), isNot(contains('hunter2')));
-      expect(await store.username(), 'leonard');
+      expect(await store.username(), 'leonard@example.com');
     });
 
     test('registration sends the secret as a header, not in the body',
@@ -77,13 +99,13 @@ void main() {
       // in between.
       String? header;
       String? body;
-      final auth = stateWith(json(201, {'token': 't', 'username': 'leonard'},
+      final auth = stateWith(json(201, {'token': 't', 'email': 'leonard@example.com'},
           onCall: (r) {
         header = r.headers['X-Register-Secret'];
         body = r.body;
       }));
       await auth.register(
-          username: 'leonard',
+          email: 'leonard@example.com',
           password: 'pw',
           device: 'Mac',
           registrationSecret: 'invite-code');
@@ -97,9 +119,9 @@ void main() {
       // would be compared against the configured one and rejected.
       Map<String, String>? headers;
       final auth = stateWith(
-          json(201, {'token': 't', 'username': 'leonard'},
+          json(201, {'token': 't', 'email': 'leonard@example.com'},
               onCall: (r) => headers = r.headers));
-      await auth.register(username: 'leonard', password: 'pw', device: 'Mac');
+      await auth.register(email: 'leonard@example.com', password: 'pw', device: 'Mac');
       expect(headers!.containsKey('X-Register-Secret'), isFalse);
     });
   });
@@ -108,7 +130,7 @@ void main() {
     Future<String> messageFor(int status, [Map<String, dynamic>? body]) async {
       final auth = stateWith(json(status, body ?? const {}));
       try {
-        await auth.login(username: 'a', password: 'b', device: 'Mac');
+        await auth.login(email: 'a@example.com', password: 'b', device: 'Mac');
         return 'no exception';
       } on AuthException catch (e) {
         return e.message;
@@ -128,13 +150,13 @@ void main() {
       final auth = stateWith(
           json(429, {'detail': 'too many new accounts from this network'}));
       await expectLater(
-          auth.register(username: 'x', password: 'pw', device: 'Mac'),
+          auth.register(email: 'x@example.com', password: 'pw', device: 'Mac'),
           throwsA(isA<AuthException>().having(
               (e) => e.message, 'message', contains('Try again in an hour'))));
     });
 
-    test('409 says the username is taken', () async {
-      expect(await messageFor(409), contains('username is taken'));
+    test('409 says the email already has an account', () async {
+      expect(await messageFor(409), contains('already has an account'));
     });
 
     test('an unreachable server is not reported as bad credentials', () async {
@@ -142,7 +164,7 @@ void main() {
       // a password that was never wrong.
       final auth = stateWith(MockClient((_) async => throw http.ClientException('down')));
       await expectLater(
-        auth.login(username: 'a', password: 'b', device: 'Mac'),
+        auth.login(email: 'a@example.com', password: 'b', device: 'Mac'),
         throwsA(isA<AuthException>().having((e) => e.message, 'message',
             contains('Could not reach the server'))),
       );
@@ -152,7 +174,7 @@ void main() {
     test('a failed sign-in leaves nothing stored', () async {
       final auth = stateWith(json(401, {}));
       try {
-        await auth.login(username: 'a', password: 'b', device: 'Mac');
+        await auth.login(email: 'a@example.com', password: 'b', device: 'Mac');
       } on AuthException {
         // expected
       }
@@ -171,7 +193,7 @@ void main() {
           baseUrl: 'https://crm.example.com',
         ),
       );
-      await store.save('tok-1', 'leonard');
+      await store.save('tok-1', 'leonard@example.com');
       await auth.load();
       expect(auth.signedIn, isTrue);
 
@@ -184,7 +206,7 @@ void main() {
       // What the sync engine calls on a 401. Sitting on a token the server has
       // revoked is the armed-and-dead state this project keeps designing away.
       final auth = stateWith(json(200, {}));
-      await store.save('tok-1', 'leonard');
+      await store.save('tok-1', 'leonard@example.com');
       await auth.load();
 
       await auth.forgetRejectedToken();
@@ -208,11 +230,11 @@ void main() {
           baseUrl: 'https://crm.example.com',
           client: MockClient((req) => req.url.path == '/auth/login'
               ? Future.value(http.Response(
-                  jsonEncode({'token': 'tok-1', 'username': 'leonard'}), 200))
+                  jsonEncode({'token': 'tok-1', 'email': 'leonard@example.com'}), 200))
               : onDelete(req)),
         ),
       );
-      await auth.login(username: 'leonard', password: 'pw', device: 'Mac');
+      await auth.login(email: 'leonard@example.com', password: 'pw', device: 'Mac');
       return auth;
     }
 
@@ -301,11 +323,11 @@ void main() {
     });
 
     test('a stored token is restored across launches', () async {
-      await store.save('tok-1', 'leonard');
+      await store.save('tok-1', 'leonard@example.com');
       final auth = stateWith(json(200, {}));
       await auth.load();
       expect(auth.signedIn, isTrue);
-      expect(auth.username, 'leonard');
+      expect(auth.email, 'leonard@example.com');
     });
   });
 }
