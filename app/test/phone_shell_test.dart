@@ -181,6 +181,53 @@ void main() {
     await unmount(tester);
   });
 
+  group('the keyboard', () {
+    // ⚠ Not primaryFocus.hasFocus: unfocusing moves focus to the enclosing
+    // SCOPE, which still reports hasFocus. What matters is whether a text
+    // field still holds it, because that is what keeps the keyboard up.
+    bool aFieldHasFocus(WidgetTester tester) => tester
+        .widgetList<EditableText>(find.byType(EditableText))
+        .any((e) => e.focusNode.hasFocus);
+
+    // ⚠ The screens live in an IndexedStack, so focus survives a tab change:
+    // a focused Capture field kept the keyboard up over Today and People,
+    // and the only way down was finishing a capture.
+    testWidgets('switching tabs puts it away', (tester) async {
+      await tester.pumpWidget(host(PhoneShell(db: db)));
+      await tester.pump();
+
+      await tester.tap(find.byType(TextField).first);
+      await tester.pump();
+      expect(aFieldHasFocus(tester), isTrue);
+
+      // ⚠ .last: every tab's screen stays built in the IndexedStack, so the
+      // Today SCREEN also contains the word "Today". The nav bar is last.
+      await tester.tap(find.text('Today').last);
+      await tester.pump();
+
+      expect(currentTab(tester), PhoneTab.today);
+      expect(aFieldHasFocus(tester), isFalse,
+          reason: 'the keyboard followed the tab change');
+
+      await unmount(tester);
+    });
+
+    testWidgets('tapping away from the fields puts it away', (tester) async {
+      await tester.pumpWidget(host(PhoneShell(db: db)));
+      await tester.pump();
+
+      await tester.tap(find.byType(TextField).first);
+      await tester.pump();
+      expect(aFieldHasFocus(tester), isTrue);
+
+      await tester.tap(find.text('OCCASIONS'));
+      await tester.pump();
+      expect(aFieldHasFocus(tester), isFalse);
+
+      await unmount(tester);
+    });
+  });
+
   group('capture', () {
     testWidgets('a name alone does not save — a channel is required',
         (tester) async {

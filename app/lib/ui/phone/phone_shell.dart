@@ -54,7 +54,15 @@ class PhoneShellState extends State<PhoneShell> {
   late PhoneTab _tab = widget.initial;
 
   /// Entry point for a notification tap.
-  void openTo(PhoneTab tab) => setState(() => _tab = tab);
+  void openTo(PhoneTab tab) {
+    // ⚠ DROP THE KEYBOARD when the tab changes. The screens live in an
+    // IndexedStack, so a focused Capture field keeps its focus when you leave
+    // it — the keyboard then follows you to Today or People and covers the
+    // screen you switched to, with no way back down except finishing a
+    // capture. Leaving a screen means leaving its keyboard.
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _tab = tab);
+  }
 
   @override
   void initState() {
@@ -81,15 +89,21 @@ class PhoneShellState extends State<PhoneShell> {
       // ⚠ resizeToAvoidBottomInset stays true: the capture form must scroll
       // clear of the keyboard, since the keyboard is up the whole time it is
       // being used.
-      body: IndexedStack(
-        index: _tab.index,
-        children: [
-          CaptureScreen(db: widget.db),
-          PhoneTodayScreen(db: widget.db),
-          PhonePeopleScreen(db: widget.db),
-          PhoneCalendarScreen(db: widget.db),
-          PhoneReviewScreen(db: widget.db),
-        ],
+      // ⚠ Tap anywhere that is not a control to put the keyboard away.
+      // Translucent so every tap still reaches the widget under it.
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: IndexedStack(
+          index: _tab.index,
+          children: [
+            CaptureScreen(db: widget.db),
+            PhoneTodayScreen(db: widget.db),
+            PhonePeopleScreen(db: widget.db),
+            PhoneCalendarScreen(db: widget.db),
+            PhoneReviewScreen(db: widget.db),
+          ],
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -117,7 +131,7 @@ class PhoneShellState extends State<PhoneShell> {
                       icon: icon,
                       selected: _tab == tab,
                       badge: tab == PhoneTab.today,
-                      onTap: () => setState(() => _tab = tab),
+                      onTap: () => openTo(tab),
                     ),
                   ),
               ],

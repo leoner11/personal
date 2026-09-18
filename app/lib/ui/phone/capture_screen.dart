@@ -60,6 +60,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
           children: [
             Expanded(
               child: ListView(
+                // ⚠ Dragging the form down puts the keyboard away, the way
+                // every other iOS form behaves.
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(
                     PD.screenPad, 0, PD.screenPad, PD.sectionGap),
                 children: [
