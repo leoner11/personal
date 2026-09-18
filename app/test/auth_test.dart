@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/testing.dart';
 import 'package:personal_crm/domain/auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,6 +52,42 @@ void main() {
         return http.Response(jsonEncode(body), status,
             headers: {'content-type': 'application/json'});
       });
+
+  group('where the token is kept on macOS', () {
+    // ⚠ The Mac is sandboxed and ad-hoc signed, so the keychain refuses every
+    // write (errSecMissingEntitlement) — which is how signing in silently did
+    // nothing. macOS therefore keeps the session in a file. These run on macOS,
+    // so they exercise the real path.
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('session'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    TokenStore storeIn(Directory d) => TokenStore(const FlutterSecureStorage(), d);
+
+    test('a signed-in session survives being read back', () async {
+      final store = storeIn(dir);
+      expect(await store.token(), isNull, reason: 'nothing stored yet');
+
+      await store.save('tok-1', 'leonard@example.com');
+      expect(await store.token(), 'tok-1');
+      expect(await store.username(), 'leonard@example.com');
+
+      await store.clear();
+      expect(await store.token(), isNull);
+      expect(File('${dir.path}/session.json').existsSync(), isFalse);
+    });
+
+    test('the file is not readable by anyone else', () async {
+      await storeIn(dir).save('tok-1', 'leonard@example.com');
+      final mode = File('${dir.path}/session.json').statSync().mode & 0x1FF;
+      expect(mode, 0x180, reason: 'expected 0600, got ${mode.toRadixString(8)}');
+    });
+
+    test('a corrupted file reads as signed out rather than crashing', () async {
+      File('${dir.path}/session.json').writeAsStringSync('{ not json');
+      expect(await storeIn(dir).token(), isNull);
+    });
+  });
 
   group('the email check in the app', () {
     // ⚠ Loose ON PURPOSE. It exists to catch a typo before a round trip; the

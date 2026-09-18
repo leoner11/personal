@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import 'config.dart';
 import 'sync.dart';
@@ -21,27 +23,87 @@ import 'sync.dart';
 /// opaque token, it lives in the Keychain / Android Keystore, and it rides in
 /// `Authorization: Bearer …`. That is the same header /sync always took.
 class TokenStore {
-  const TokenStore([this._storage = const FlutterSecureStorage()]);
+  const TokenStore([this._storage = const FlutterSecureStorage(), this._macDir]);
   final FlutterSecureStorage _storage;
+
+  /// Only tests pass this; production asks path_provider. See [_sessionFile].
+  final Directory? _macDir;
 
   static const _kToken = 'sync_token';
   static const _kUser = 'sync_username';
 
-  /// ⚠ Keychain, not SharedPreferences. A bearer token is a password: on
+  /// ⚠ macOS CANNOT USE THE KEYCHAIN HERE, and this is not a preference.
+  /// The Mac app is sandboxed and ad-hoc signed (no certificate), which is
+  /// what lets its zip be handed to anyone; a sandboxed app with no signing
+  /// team has no keychain access group, so every write fails with
+  /// errSecMissingEntitlement. That failure is how signing in appeared to do
+  /// nothing at all: the server made the account, saving the token threw.
+  /// Adding the entitlement would force real signing and break those zips.
+  ///
+  /// So macOS keeps the token in a 0600 file inside the app's sandbox
+  /// container. Weaker than the keychain — another program running as this
+  /// user could read it — and accepted knowingly for one revocable device
+  /// token. ⚠ REPLACE THIS with keychain storage the moment the app is signed
+  /// with a paid Developer ID, which is also when the zips can be notarized.
+  bool get _useFile => Platform.isMacOS;
+
+  /// ⚠ Keychain/Keystore everywhere else. A bearer token is a password: on
   /// Android, preferences sit in plain XML readable by anyone with a rooted
   /// device or a backup extraction, and this token reaches the entire contact
   /// list and cashflow.
-  Future<String?> token() => _storage.read(key: _kToken);
-  Future<String?> username() => _storage.read(key: _kUser);
+  Future<String?> token() async {
+    if (!_useFile) return _storage.read(key: _kToken);
+    final session = await _read();
+    return session == null ? null : session['token'] as String?;
+  }
+
+  Future<String?> username() async {
+    if (!_useFile) return _storage.read(key: _kUser);
+    final session = await _read();
+    return session == null ? null : session['username'] as String?;
+  }
 
   Future<void> save(String token, String username) async {
+    if (_useFile) return _write({'token': token, 'username': username});
     await _storage.write(key: _kToken, value: token);
     await _storage.write(key: _kUser, value: username);
   }
 
   Future<void> clear() async {
+    if (_useFile) {
+      final f = await _sessionFile();
+      if (f.existsSync()) await f.delete();
+      return;
+    }
     await _storage.delete(key: _kToken);
     await _storage.delete(key: _kUser);
+  }
+
+  Future<File> _sessionFile() async {
+    final dir = _macDir ?? await getApplicationSupportDirectory();
+    return File('${dir.path}/session.json');
+  }
+
+  Future<Map<String, dynamic>?> _read() async {
+    final f = await _sessionFile();
+    if (!f.existsSync()) return null;
+    try {
+      return jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      // A truncated or hand-edited file means "signed out", never a crash.
+      return null;
+    }
+  }
+
+  Future<void> _write(Map<String, dynamic> session) async {
+    final f = await _sessionFile();
+    await f.writeAsString(jsonEncode(session), flush: true);
+    // ⚠ Best effort, and after the write: Dart cannot create a file with a
+    // mode. The container is already private to this user; this narrows it to
+    // the user alone rather than the user's group as well.
+    try {
+      await Process.run('chmod', ['600', f.path]);
+    } catch (_) {}
   }
 }
 

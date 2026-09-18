@@ -1,19 +1,19 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
-/// ⚠ WHY THIS EXISTS. The sandboxed Mac app stores its sign-in token in the
-/// keychain, which a sandboxed app may only do with this entitlement. Without
-/// it the server created the account, saving the token threw, and the app said
-/// nothing and stayed signed out — for a whole day. Nothing else in the build
-/// notices; a release just quietly cannot sign in.
+/// ⚠ The Mac app must reach the network, and must NOT claim entitlements that
+/// force real signing. It is sandboxed and ad-hoc signed so its zip runs on
+/// anyone's Mac; adding keychain-access-groups makes the build demand a
+/// development certificate, which is how this broke once already. macOS keeps
+/// its token in a file instead — see TokenStore.
 void main() {
   for (final f in ['macos/Runner/Release.entitlements',
                    'macos/Runner/DebugProfile.entitlements']) {
-    test('$f lets the app use the keychain and the network', () {
+    test('$f keeps the app networkable and ad-hoc signable', () {
       final xml = File(f).readAsStringSync();
-      expect(xml, contains('keychain-access-groups'),
-          reason: 'no keychain entitlement — sign-in cannot persist');
-      expect(xml, contains(r'$(AppIdentifierPrefix)com.mjcxstudio.personalCrm'));
+      expect(xml, isNot(contains('keychain-access-groups')),
+          reason: 'this entitlement forces development signing, breaking '
+              'the zips people download');
       expect(xml, contains('com.apple.security.network.client'),
           reason: 'no outgoing network — sync and sign-in cannot reach the server');
     });
