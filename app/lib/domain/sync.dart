@@ -503,21 +503,21 @@ class SyncEngine {
         'currency': m.currency,
         'label': m.label,
         'status': m.status,
-        'engagement_id': m.engagementId,
-        'person_id': m.personId,
+        'engagement_id': m.engagementId ?? '',
+        'person_id': m.personId ?? '',
         'occasion_tag': m.occasionTag ?? '',
         'deleted_at': m.deletedAt?.toUtc().toIso8601String(),
       };
 
   Map<String, dynamic> _meeting(Meeting m) => {
         'id': m.id,
-        'person_id': m.personId,
-        'engagement_id': m.engagementId,
+        'person_id': m.personId ?? '',
+        'engagement_id': m.engagementId ?? '',
         'title': m.title,
         'starts_at': m.startsAt.toUtc().toIso8601String(),
         'duration_minutes': m.durationMinutes,
-        'location': m.location,
-        'notes': m.notes,
+        'location': m.location ?? '',
+        'notes': m.notes ?? '',
         'deleted_at': m.deletedAt?.toUtc().toIso8601String(),
       };
 

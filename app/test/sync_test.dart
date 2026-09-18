@@ -272,6 +272,51 @@ void main() {
     expect(server.rows['people']!.keys, contains(tan));
   });
 
+  test('nothing optional is ever uploaded as null', () async {
+    // ⚠ THE 500. Columns like person_id, engagement_id, location and notes are
+    // NOT NULL with a "" default on the server; sending null raised
+    // IntegrityError and failed the WHOLE push, so every table with an
+    // optional link died while people and occasions went through — and the
+    // app just said "Never synced".
+    final db = mac.db;
+    final pid = await mac.addPerson('Pak Andi');
+    await seedBuiltInTags(db);
+    await db.into(db.occasions).insert(OccasionsCompanion.insert(
+        name: 'Deepavali', date: DateTime(2027, 10, 29), tag: 'deepavali'));
+    await db.into(db.engagements).insert(EngagementsCompanion.insert(name: 'JV'));
+    await db.addMoney(MoneyCompanion.insert(
+        date: DateTime(2026, 9, 1),
+        direction: 'in',
+        amountMinor: 1,
+        label: 'Deposit'));
+    await db.into(db.notes).insert(NotesCompanion.insert(date: DateTime.now()));
+    await db.logTouch(pid, 'called');
+    await db.addMeeting(MeetingsCompanion.insert(
+        title: 'Coffee', startsAt: DateTime(2026, 9, 20, 10)));
+    await db.addTask(TasksCompanion.insert(title: 'Quotation'));
+
+    await mac.sync();
+
+    final sent = server.pushes.single;
+    for (final table in sent.entries) {
+      for (final row in table.value) {
+        for (final field in row.entries) {
+          // ⚠ Only the columns the server declares NOT NULL matter. Dates and
+          // numbers there are nullable and null is their real value; the text
+          // columns carry `default=""` and reject it.
+          const nullable = {
+            'updated_at', 'deleted_at', 'met_when', 'ping_date', 'date',
+            'due_date', 'done_at', 'created_at', 'starts_at', 'value_minor',
+            'amount_minor', 'duration_minutes', 'sort_order',
+          };
+          if (nullable.contains(field.key)) continue;
+          expect(field.value, isNotNull,
+              reason: '${table.key}.${field.key} was uploaded as null');
+        }
+      }
+    }
+  });
+
   test('a delete on one device reaches the other', () async {
     final tan = await phone.addPerson('Mr Tan');
     await phone.sync();

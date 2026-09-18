@@ -8,7 +8,8 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from core.auth import hash_token
-from core.models import AuthToken, OccasionTag, Person
+from core.models import (AuthToken, Engagement, Meeting, Money, Note,
+                         OccasionTag, Person, Task)
 
 SECRET = "deploy-time-secret"
 
@@ -707,3 +708,55 @@ class EmailAccountTests(TestCase):
         self.assertEqual(r.status_code, 201)
         self.assertEqual(body(r)["email"], "leonard@example.com")
         self.assertEqual(body(r)["username"], "leonard@example.com")
+
+
+class NullTolerantPushTests(TestCase):
+    """⚠ A push where an optional link is null used to 500 the WHOLE batch.
+
+    person_id, engagement_id, location, notes and their kin are NOT NULL with a
+    "" default, so storing None raised IntegrityError — every table with an
+    optional link failed while people and occasions went through, and the app
+    only said "Never synced". Older builds still send null, so the server has
+    to take it."""
+
+    def setUp(self):
+        cache.clear()
+        r = self.client.post(
+            "/auth/register",
+            data=json.dumps({"email": "leonard@example.com", "password": "a-long-passphrase-1"}),
+            content_type="application/json",
+        )
+        self.auth = {"authorization": f"Bearer {body(r)['token']}"}
+
+    def push(self, tables):
+        return self.client.post(
+            "/sync", data=json.dumps({"tables": tables}),
+            content_type="application/json", headers=self.auth)
+
+    def test_every_table_takes_null_for_its_optional_text(self):
+        r = self.push({
+            "money": [{"id": "m1", "date": "2026-09-01T00:00:00Z", "direction": "out",
+                       "amount_minor": 100, "currency": "CNY", "label": "Gift",
+                       "status": "expected", "engagement_id": None,
+                       "person_id": None, "occasion_tag": None}],
+            "meetings": [{"id": "e1", "title": "Coffee", "starts_at": "2026-09-20T02:00:00Z",
+                          "person_id": None, "engagement_id": None,
+                          "location": None, "notes": None}],
+            "notes": [{"id": "n1", "date": "2026-09-01T00:00:00Z", "text": None,
+                       "person_id": None, "engagement_id": None, "tag": None}],
+            "tasks": [{"id": "t1", "title": "Quote", "notes": None,
+                       "person_id": None, "engagement_id": None}],
+            "engagements": [{"id": "g1", "name": "JV", "counterparty_id": None,
+                             "status": None, "currency": None, "notes": None}],
+        })
+        self.assertEqual(r.status_code, 200)
+        # ⚠ Stored as "", the column's own default — not as the string "None".
+        self.assertEqual(Money.objects.get(client_id="m1").person_id, "")
+        self.assertEqual(Meeting.objects.get(client_id="e1").location, "")
+        self.assertEqual(Note.objects.get(client_id="n1").text, "")
+        self.assertEqual(Task.objects.get(client_id="t1").notes, "")
+        self.assertEqual(Engagement.objects.get(client_id="g1").status, "")
+
+    def test_a_nullable_date_is_still_stored_as_null(self):
+        self.push({"people": [{"id": "p1", "name": "Pak Andi", "met_when": None}]})
+        self.assertIsNone(Person.objects.get(client_id="p1").met_when)

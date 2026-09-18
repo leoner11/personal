@@ -171,6 +171,20 @@ def push(request):
                     v = row[f]
                     if f in DATETIME_FIELDS and isinstance(v, str):
                         v = parse_datetime(v)
+                    # ⚠ null means "not set" to the client, but these columns
+                    # are NOT NULL with a "" default (person_id, engagement_id,
+                    # location, notes...). Storing None raised IntegrityError
+                    # and the whole push came back 500 — every table with an
+                    # optional link failed while people and occasions passed.
+                    # Coerced here as well as in the client, so an older build
+                    # that still sends null keeps syncing.
+                    if v is None:
+                        field = model._meta.get_field(f)
+                        if not field.null and field.get_internal_type() in (
+                            "CharField",
+                            "TextField",
+                        ):
+                            v = ""
                     data[f] = v
 
                 cid = row.get("id")
