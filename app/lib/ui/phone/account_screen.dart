@@ -142,6 +142,13 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
       _secret.clear();
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      // ⚠ ANYTHING ELSE MUST STILL SHOW. Signing in on the Mac silently did
+      // nothing for a day: the server created the account, then saving the
+      // token threw because the sandboxed app had no keychain entitlement.
+      // That is not an AuthException, so nothing was caught and nothing was
+      // said. A failure the user cannot see is the worst kind.
+      if (mounted) setState(() => _error = 'This device could not finish: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -401,6 +408,13 @@ class PhoneDeleteAccountSheetState extends State<PhoneDeleteAccountSheet> {
       if (mounted) Navigator.pop(context);
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      // ⚠ ANYTHING ELSE MUST STILL SHOW. Signing in on the Mac silently did
+      // nothing for a day: the server created the account, then saving the
+      // token threw because the sandboxed app had no keychain entitlement.
+      // That is not an AuthException, so nothing was caught and nothing was
+      // said. A failure the user cannot see is the worst kind.
+      if (mounted) setState(() => _error = 'This device could not finish: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
