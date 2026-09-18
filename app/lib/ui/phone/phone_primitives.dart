@@ -289,9 +289,16 @@ class _PhoneBtnState extends State<PhoneBtn> {
                   Icon(widget.icon, size: 18, color: fg),
                   const SizedBox(width: 8),
                 ],
-                Text(widget.label,
-                    style: PT.body
-                        .copyWith(color: fg, fontWeight: FontWeight.w600)),
+                // ⚠ Flexible + ellipsis: a label longer than the button used
+                // to overflow and clip against the edge rather than shrink.
+                Flexible(
+                  child: Text(widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: PT.body
+                          .copyWith(color: fg, fontWeight: FontWeight.w600)),
+                ),
               ],
             ),
           ),

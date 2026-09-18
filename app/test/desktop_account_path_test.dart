@@ -51,7 +51,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    // The panel that can both sign in and create an account.
+    // The panel that can both sign in and create an account, with the mode
+    // it is currently in stated on screen.
+    expect(find.text('Sign in'), findsWidgets);
     expect(find.text('Create an account'), findsOneWidget);
     expect(find.text('Privacy policy'), findsOneWidget);
 

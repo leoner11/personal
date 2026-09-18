@@ -157,9 +157,20 @@ class _AccountDialogState extends State<AccountDialog> {
                       onPressed: () => Navigator.pop(context)),
                 ]),
               ] else ...[
+                // ⚠ THE MODE IS STATED, not implied by a button label. The
+                // ghost button below only SWITCHES modes, and when the only
+                // sign of that was the primary button's label changing from
+                // "Sign in" to "Create account", tapping it read as "nothing
+                // happened" — and the account was never created.
+                Text(_registering ? 'Create an account' : 'Sign in',
+                    style: T.entityName.copyWith(color: t.textPrimary)),
+                const SizedBox(height: 4),
                 Text(
-                    'Sign in to sync this Mac with your server. '
-                    'The app works fully without it.',
+                    _registering
+                        ? 'Creates a new account on your server, then signs '
+                            'this Mac in. The app works fully without one.'
+                        : 'Signs this Mac in to sync with your server. '
+                            'The app works fully without it.',
                     style: T.secondary.copyWith(color: t.textSecondary)),
                 const SizedBox(height: 14),
                 Field(label: 'Email', controller: _email),

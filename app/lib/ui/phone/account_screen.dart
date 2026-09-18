@@ -188,9 +188,17 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
                   lastSynced: _lastSynced,
                   syncLoaded: _syncLoaded)
             else ...[
+              // ⚠ Same reason as the Mac: say which mode this is, rather than
+              // leaving it to a button label nobody reads.
+              Text(_registering ? 'Create an account' : 'Sign in',
+                  style: PT.entityName.copyWith(color: t.textPrimary)),
+              const SizedBox(height: 4),
               Text(
-                  'Sign in to sync this phone with your server. '
-                  'The app works fully without it.',
+                  _registering
+                      ? 'Creates a new account on your server, then signs this '
+                          'phone in. The app works fully without one.'
+                      : 'Signs this phone in to sync with your server. '
+                          'The app works fully without it.',
                   style: PT.secondary.copyWith(color: t.textSecondary)),
               const SizedBox(height: PD.sectionGap),
               PhoneField(
