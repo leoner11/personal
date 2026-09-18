@@ -188,8 +188,13 @@ class _AccountDialogState extends State<AccountDialog> {
                       style: T.secondary.copyWith(color: t.danger.text)),
                 ],
                 const SizedBox(height: 18),
-                Row(children: [
-                  Btn(
+                // ⚠ TWO LINES, not three buttons across. All three on one row
+                // overflowed this 420pt dialog and clipped the primary button
+                // against the right edge — "I already have an account" is the
+                // widest label in the app and grows further in translation.
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Btn(
                       _registering
                           ? 'I already have an account'
                           : 'Create an account',
@@ -200,6 +205,9 @@ class _AccountDialogState extends State<AccountDialog> {
                                 _registering = !_registering;
                                 _error = null;
                               })),
+                ),
+                const SizedBox(height: 8),
+                Row(children: [
                   const Spacer(),
                   Btn('Cancel',
                       variant: BtnVariant.ghost,

@@ -40,17 +40,6 @@ void main() {
     appAuth = auth;
     addTearDown(() => appAuth = null);
 
-    // ⚠ The dialog's button row overflows ONLY under the test font, whose
-    // glyphs are far wider than the system font the Mac actually draws with
-    // (the same row renders inside 420pt on device). Silence that one
-    // rendering assert; everything else stays loud.
-    final previousOnError = FlutterError.onError;
-    FlutterError.onError = (details) {
-      if (details.exception.toString().contains('RenderFlex overflowed')) return;
-      previousOnError?.call(details);
-    };
-    addTearDown(() => FlutterError.onError = previousOnError);
-
     await tester.pumpWidget(
         MaterialApp(theme: buildTheme(Brightness.light), home: Shell(db: db)));
     await tester.pump(const Duration(milliseconds: 100));
