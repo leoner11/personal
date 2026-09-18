@@ -17,6 +17,21 @@
 
 ---
 
+<p align="center">
+  <img src="docs/screenshots/desktop-calendar.png" alt="Calendar on macOS" width="820">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-tasks.png" alt="Tasks on macOS" width="404">
+  <img src="docs/screenshots/desktop-notes.png" alt="Notes on macOS" width="404">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/phone-today.png" alt="Today on iPhone" width="230">
+  &nbsp;
+  <img src="docs/screenshots/phone-notes.png" alt="Notes on iPhone" width="230">
+</p>
+
 ## Why
 
 (THIS IS AI WRITTEN BUT ITS TRUEEEE)
@@ -39,10 +54,10 @@ i want the app to be something that i actually use everyday and not something th
 | | |
 |---|---|
 | ☀️ **Today** | Meetings today and tomorrow, tasks due or overdue, occasions in the next 14 days, follow-up pings, and expected money to confirm. |
-| ✅ **Tasks** | Type a line and press Enter. Add a due date or link a person or project when it matters. Tasks show on the calendar, and on Today when due. |
 | 📅 **Calendar** | Month grid with the day's detail beneath. Meetings with time, place and links, reminded the day before and an hour before. Add a meeting to your real calendar — Calendar.app on the desktop, the phone's own new-event screen on iOS and Android. |
-| 👥 **People** | WhatsApp or WeChat channel, occasion tags, follow-up pings, and a timeline of touches, notes, money and meetings. |
+| ✅ **Tasks** | Type a line and press Enter. Add a due date or link a person or project when it matters. Tasks show on the calendar, and on Today when due. |
 | 🎁 **Occasions** | A seeded three-year calendar of Chinese, Indonesian and Malaysian festivals. Reminders go to anyone tagged, and you are warned before the calendar runs out. |
+| 👥 **People** | WhatsApp or WeChat channel, occasion tags, follow-up pings, and a timeline of touches, notes, money and meetings. |
 | 📁 **Projects** | Deals, JVs, clients and leads, with a free-text status, on purpose. It is not a sales pipeline. |
 | 💰 **Money** | Cashflow only: what came in, what went out, what is expected. Not bookkeeping. |
 | 📝 **Notes** | Plain notes, optionally linked to a person or a project. |
@@ -89,8 +104,9 @@ Windows does not ask for notification permission. If reminders never appear, che
 > The Windows build is new and has not yet been tried on a real PC. Reports of anything that
 > looks wrong are very welcome.
 
-The downloads are local-only. To sync between devices, run your own
-[sync server](server/README.md) and build the app with its address (see below).
+The downloads sync with the server i host, once you make an account from inside the app. if you
+never sign in, nothing leaves the machine. you can also point a build at your own
+[sync server](server/README.md) instead (see below).
 
 ## Platforms
 
@@ -99,7 +115,7 @@ The downloads are local-only. To sync between devices, run your own
 | macOS 10.15+ | ✅ Primary client, in daily use |
 | Windows 10+ | 🟡 Builds in CI; not yet run on a real PC |
 | Android | 🟡 Builds and runs; tested on an emulator only |
-| iOS | 🟡 Compiles; not yet run on a device |
+| iOS | 🟡 Runs on a real iPhone, sideloaded; not on the App Store yet |
 | Linux | ❌ Not yet |
 
 Mac and Windows share the same desktop layout. On Windows the app keeps the normal title bar,
@@ -130,9 +146,10 @@ Publishing a GitHub release also runs [`.github/workflows/windows.yml`](.github/
 which builds the Windows app and attaches `Personal-<tag>-Windows.zip` to the release. It can
 be run by hand from the Actions tab too.
 
-To sync, set `kSyncBaseUrl` in [`app/lib/domain/config.dart`](app/lib/domain/config.dart) to
-your server's `https://` address before building. Plain `http://` is refused on purpose. Then
-sign in from the sync line at the bottom of the sidebar.
+`kSyncBaseUrl` in [`app/lib/domain/config.dart`](app/lib/domain/config.dart) already points at
+the server i host. To use your own, set it to that server's `https://` address before building.
+Plain `http://` is refused on purpose. Then sign in — on the desktop from the sync line at the
+bottom of the sidebar, on the phone from **Review → Account**.
 
 ## Sync server
 
