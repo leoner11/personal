@@ -74,9 +74,15 @@ void main() {
     expect(find.text('Privacy policy'), findsOneWidget);
   });
 
-  testWidgets('phone: a build with no server shows no dead link', (tester) async {
+  test('this build links to the policy on its own sync server', () {
+    // ⚠ The URL App Store Connect is given must be the one the app opens.
+    expect(kPrivacyPolicyUrl.toString(),
+        'https://personal-api.mjcxstudio.com/privacy');
+  });
+
+  testWidgets('phone: the link is there without being passed in', (tester) async {
     await pumpPhone(tester);
-    expect(find.text('Privacy policy'), findsNothing);
+    expect(find.text('Privacy policy'), findsOneWidget);
   });
 
   testWidgets('desktop: the account dialog links to the policy', (tester) async {
@@ -84,9 +90,9 @@ void main() {
     expect(find.text('Privacy policy'), findsOneWidget);
   });
 
-  testWidgets('desktop: a build with no server shows no dead link',
+  testWidgets('desktop: the link is there without being passed in',
       (tester) async {
     await pumpDesktop(tester);
-    expect(find.text('Privacy policy'), findsNothing);
+    expect(find.text('Privacy policy'), findsOneWidget);
   });
 }

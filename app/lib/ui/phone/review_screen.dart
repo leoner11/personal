@@ -162,7 +162,7 @@ class _AccountEntry extends StatelessWidget {
           subtitle: !kSyncEnabled
               ? 'No server configured'
               : auth.signedIn
-              ? 'Syncing as ${auth.username}'
+              ? 'Syncing as ${auth.email}'
               : 'Not signed in — this phone is local only',
           chevron: true,
           onTap: () => PhoneReviewScreen._push(

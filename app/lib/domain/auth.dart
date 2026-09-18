@@ -105,7 +105,7 @@ class AuthApi {
     throw AuthException(switch (r.statusCode) {
       401 => 'Wrong username or password.',
       403 => detail ?? 'Registration is closed on this server.',
-      409 => 'That username is taken.',
+      409 => 'That email already has an account. Sign in instead.',
       // ⚠ Two different 429s. Signup is capped per network per hour; telling
       // someone to "wait a few minutes" there sends them back too early.
       429 => detail == 'too many new accounts from this network'
@@ -117,35 +117,41 @@ class AuthApi {
 
   /// Creates an account. [registrationSecret] is only needed on a server that
   /// has closed signup with REGISTRATION_SECRET; most will leave it open.
-  Future<({String token, String username})> register({
-    required String username,
+  Future<({String token, String email})> register({
+    required String email,
     required String password,
     required String device,
     String registrationSecret = '',
   }) async {
     final d = await _post(
       '/auth/register',
-      {'username': username, 'password': password, 'device': device},
+      {'email': email, 'password': password, 'device': device},
       // ⚠ A header, never the body: request bodies land in server and proxy
       // logs, and this is an invite code.
       extraHeaders: registrationSecret.isEmpty
           ? null
           : {'X-Register-Secret': registrationSecret},
     );
-    return (token: d['token'] as String, username: d['username'] as String);
+    return (token: d['token'] as String, email: _emailOf(d));
   }
 
-  Future<({String token, String username})> login({
-    required String username,
+  Future<({String token, String email})> login({
+    required String email,
     required String password,
     required String device,
   }) async {
     final d = await _post(
       '/auth/login',
-      {'username': username, 'password': password, 'device': device},
+      {'email': email, 'password': password, 'device': device},
     );
-    return (token: d['token'] as String, username: d['username'] as String);
+    return (token: d['token'] as String, email: _emailOf(d));
   }
+
+  /// ⚠ Falls back to the old key. A server deployed before the switch to
+  /// email answers with "username"; reading only "email" would crash a
+  /// sign-in that actually succeeded.
+  static String _emailOf(Map<String, dynamic> d) =>
+      (d['email'] ?? d['username'] ?? '') as String;
 
   /// Deletes the account on the server, with everything it ever synced.
   ///
@@ -208,11 +214,14 @@ class AuthState extends ChangeNotifier {
   final AuthApi _api;
 
   String? _token;
-  String? _username;
+  String? _email;
   bool _loaded = false;
 
   String? get token => _token;
-  String? get username => _username;
+
+  /// The account's email address — the identifier, chosen over a username
+  /// because it is unique by nature and is what a password reset would need.
+  String? get email => _email;
   bool get signedIn => _token != null;
 
   /// False until the Keychain read finishes. The UI must not render "signed
@@ -221,34 +230,34 @@ class AuthState extends ChangeNotifier {
 
   Future<void> load() async {
     _token = await _store.token();
-    _username = await _store.username();
+    _email = await _store.username();
     _loaded = true;
     notifyListeners();
   }
 
   Future<void> register({
-    required String username,
+    required String email,
     required String password,
     required String device,
     String registrationSecret = '',
   }) async {
     final r = await _api.register(
-      username: username,
+      email: email,
       password: password,
       device: device,
       registrationSecret: registrationSecret,
     );
-    await _accept(r.token, r.username);
+    await _accept(r.token, r.email);
   }
 
   Future<void> login({
-    required String username,
+    required String email,
     required String password,
     required String device,
   }) async {
     final r =
-        await _api.login(username: username, password: password, device: device);
-    await _accept(r.token, r.username);
+        await _api.login(email: email, password: password, device: device);
+    await _accept(r.token, r.email);
   }
 
   Future<void> logout() async {
@@ -256,7 +265,7 @@ class AuthState extends ChangeNotifier {
     if (t != null) await _api.logout(t);
     await _store.clear();
     _token = null;
-    _username = null;
+    _email = null;
     notifyListeners();
   }
 
@@ -276,7 +285,7 @@ class AuthState extends ChangeNotifier {
     await SyncEngine.forgetDeviceOwnership();
     await _store.clear();
     _token = null;
-    _username = null;
+    _email = null;
     notifyListeners();
   }
 
@@ -285,14 +294,14 @@ class AuthState extends ChangeNotifier {
   Future<void> forgetRejectedToken() async {
     await _store.clear();
     _token = null;
-    _username = null;
+    _email = null;
     notifyListeners();
   }
 
-  Future<void> _accept(String token, String username) async {
-    await _store.save(token, username);
+  Future<void> _accept(String token, String email) async {
+    await _store.save(token, email);
     _token = token;
-    _username = username;
+    _email = email;
     notifyListeners();
   }
 }
@@ -307,3 +316,12 @@ String deleteAccountExplainer(String username, String device) =>
     'This deletes $username and everything synced to it from the server — '
     'people, notes, money, all of it — and signs out your other devices. '
     'It cannot be undone.\n\nThe data on $device stays on $device.';
+
+/// Enough of a check to keep an obvious typo from becoming a failed request.
+/// ⚠ Deliberately loose: the server validates properly, and an address that
+/// is legal but strange must not be refused by a regex written in an app.
+bool looksLikeEmail(String value) {
+  final v = value.trim();
+  final at = v.indexOf('@');
+  return at > 0 && v.indexOf('.', at) > at + 1 && !v.contains(' ') && v.length > 4;
+}

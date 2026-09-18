@@ -32,33 +32,33 @@ class RegistrationTests(TestCase):
 
     @override_settings(REGISTRATION_SECRET="")
     def test_signup_is_open_when_no_secret_is_configured(self):
-        r = self.post({"username": "leonard", "password": "a-long-passphrase-1"})
+        r = self.post({"email": "leonard@example.com", "password": "a-long-passphrase-1"})
         self.assertEqual(r.status_code, 201)
         self.assertTrue(body(r)["token"])
 
     @override_settings(REGISTRATION_SECRET="")
     def test_a_second_account_is_allowed(self):
-        self.post({"username": "leonard", "password": "a-long-passphrase-1"})
-        r = self.post({"username": "sri", "password": "a-long-passphrase-2"})
+        self.post({"email": "leonard@example.com", "password": "a-long-passphrase-1"})
+        r = self.post({"email": "sri@example.com", "password": "a-long-passphrase-2"})
         self.assertEqual(r.status_code, 201)
         self.assertEqual(User.objects.count(), 2)
 
     @override_settings(REGISTRATION_SECRET="")
-    def test_a_duplicate_username_is_refused(self):
-        self.post({"username": "leonard", "password": "a-long-passphrase-1"})
-        r = self.post({"username": "leonard", "password": "a-long-passphrase-2"})
+    def test_a_duplicate_email_is_refused(self):
+        self.post({"email": "leonard@example.com", "password": "a-long-passphrase-1"})
+        r = self.post({"email": "leonard@example.com", "password": "a-long-passphrase-2"})
         self.assertEqual(r.status_code, 409)
         self.assertEqual(User.objects.count(), 1)
 
     @override_settings(REGISTRATION_SECRET=SECRET)
     def test_the_secret_closes_signup_when_set(self):
-        self.assertEqual(self.post({"username": "x", "password": "a-long-passphrase-1"}).status_code, 403)
-        r = self.post({"username": "x", "password": "a-long-passphrase-1"}, secret=SECRET)
+        self.assertEqual(self.post({"email": "x@example.com", "password": "a-long-passphrase-1"}).status_code, 403)
+        r = self.post({"email": "x@example.com", "password": "a-long-passphrase-1"}, secret=SECRET)
         self.assertEqual(r.status_code, 201)
 
     @override_settings(REGISTRATION_SECRET="")
     def test_a_weak_password_is_refused(self):
-        r = self.post({"username": "leonard", "password": "1234"})
+        r = self.post({"email": "leonard@example.com", "password": "1234"})
         self.assertEqual(r.status_code, 400)
         self.assertEqual(User.objects.count(), 0)
 
@@ -67,12 +67,12 @@ class RegistrationTests(TestCase):
 class LoginTests(TestCase):
     def setUp(self):
         cache.clear()  # the throttle is shared process state between tests
-        self.user = User.objects.create_user("leonard", password="a-long-passphrase-1")
+        self.user = User.objects.create_user("leonard@example.com", password="a-long-passphrase-1")
 
     def login(self, password):
         return self.client.post(
             "/auth/login",
-            data=json.dumps({"username": "leonard", "password": password}),
+            data=json.dumps({"email": "leonard@example.com", "password": password}),
             content_type="application/json",
         )
 
@@ -90,7 +90,7 @@ class LoginTests(TestCase):
         wrong_pw = body(self.login("wrong"))["detail"]
         r = self.client.post(
             "/auth/login",
-            data=json.dumps({"username": "nobody", "password": "wrong"}),
+            data=json.dumps({"email": "nobody@example.com", "password": "wrong"}),
             content_type="application/json",
         )
         self.assertEqual(wrong_pw, body(r)["detail"])
@@ -113,10 +113,10 @@ class LoginTests(TestCase):
 class ProtectedRouteTests(TestCase):
     def setUp(self):
         cache.clear()
-        self.user = User.objects.create_user("leonard", password="a-long-passphrase-1")
+        self.user = User.objects.create_user("leonard@example.com", password="a-long-passphrase-1")
         r = self.client.post(
             "/auth/login",
-            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            data=json.dumps({"email": "leonard@example.com", "password": "a-long-passphrase-1"}),
             content_type="application/json",
         )
         self.token = body(r)["token"]
@@ -142,7 +142,7 @@ class ProtectedRouteTests(TestCase):
             self.client.post(
                 "/auth/login",
                 data=json.dumps(
-                    {"username": "leonard", "password": "a-long-passphrase-1"}
+                    {"email": "leonard@example.com", "password": "a-long-passphrase-1"}
                 ),
                 content_type="application/json",
             )
@@ -153,7 +153,7 @@ class ProtectedRouteTests(TestCase):
 
     def test_me_reports_the_account_behind_the_token(self):
         r = self.client.get("/auth/me", headers={"authorization": f"Bearer {self.token}"})
-        self.assertEqual(body(r)["username"], "leonard")
+        self.assertEqual(body(r)["email"], "leonard@example.com")
 
 
 @override_settings(REGISTRATION_SECRET="")
@@ -166,12 +166,12 @@ class AdminIsGoneTests(TestCase):
     def test_admin_is_gone_even_to_a_valid_token(self):
         # ⚠ Removed, not hidden. It was a browser surface a bearer token cannot
         # guard, at a URL every scanner tries.
-        User.objects.create_user("leonard", password="a-long-passphrase-1")
+        User.objects.create_user("leonard@example.com", password="a-long-passphrase-1")
         token = body(
             self.client.post(
                 "/auth/login",
                 data=json.dumps(
-                    {"username": "leonard", "password": "a-long-passphrase-1"}
+                    {"email": "leonard@example.com", "password": "a-long-passphrase-1"}
                 ),
                 content_type="application/json",
             )
@@ -198,13 +198,13 @@ class TenantIsolationTests(TestCase):
 
     def setUp(self):
         cache.clear()
-        self.a = self.account("leonard")
-        self.b = self.account("sri")
+        self.a = self.account("leonard@example.com")
+        self.b = self.account("sri@example.com")
 
     def account(self, username):
         r = self.client.post(
             "/auth/register",
-            data=json.dumps({"username": username, "password": "a-long-passphrase-1"}),
+            data=json.dumps({"email": username, "password": "a-long-passphrase-1"}),
             content_type="application/json",
         )
         return body(r)["token"]
@@ -269,7 +269,7 @@ class TenantIsolationTests(TestCase):
 
     def test_deleting_an_account_takes_its_rows_with_it(self):
         self.push(self.a, [{"id": "row-1", "name": "Pak Andi"}])
-        User.objects.get(username="leonard").delete()
+        User.objects.get(username="leonard@example.com").delete()
         self.assertEqual(Person.objects.filter(client_id="row-1").count(), 0)
 
 
@@ -284,7 +284,7 @@ class TaskSyncTests(TestCase):
         cache.clear()
         r = self.client.post(
             "/auth/register",
-            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            data=json.dumps({"email": "leonard@example.com", "password": "a-long-passphrase-1"}),
             content_type="application/json",
         )
         self.auth = {"authorization": f"Bearer {body(r)['token']}"}
@@ -336,7 +336,7 @@ class OccasionTagSyncTests(TestCase):
         cache.clear()
         r = self.client.post(
             "/auth/register",
-            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            data=json.dumps({"email": "leonard@example.com", "password": "a-long-passphrase-1"}),
             content_type="application/json",
         )
         self.auth = {"authorization": f"Bearer {body(r)['token']}"}
@@ -400,7 +400,7 @@ class OccasionTagSyncTests(TestCase):
         # the first's and vanish.
         r = self.client.post(
             "/auth/register",
-            data=json.dumps({"username": "sri", "password": "a-long-passphrase-2"}),
+            data=json.dumps({"email": "sri@example.com", "password": "a-long-passphrase-2"}),
             content_type="application/json",
         )
         other = {"authorization": f"Bearer {body(r)['token']}"}
@@ -426,8 +426,8 @@ class AccountDeletionTests(TestCase):
 
     def setUp(self):
         cache.clear()
-        self.auth = self.register("leonard", "a-long-passphrase-1")
-        self.other = self.register("sri", "a-long-passphrase-2")
+        self.auth = self.register("leonard@example.com", "a-long-passphrase-1")
+        self.other = self.register("sri@example.com", "a-long-passphrase-2")
         for who, name in ((self.auth, "Pak Andi"), (self.other, "Bu Ratna")):
             self.client.post(
                 "/sync",
@@ -442,7 +442,7 @@ class AccountDeletionTests(TestCase):
     def register(self, username, password):
         r = self.client.post(
             "/auth/register",
-            data=json.dumps({"username": username, "password": password}),
+            data=json.dumps({"email": username, "password": password}),
             content_type="application/json",
         )
         return {"authorization": f"Bearer {body(r)['token']}"}
@@ -457,33 +457,33 @@ class AccountDeletionTests(TestCase):
 
     def test_it_needs_a_valid_token(self):
         self.assertEqual(self.delete({}, "a-long-passphrase-1").status_code, 401)
-        self.assertTrue(User.objects.filter(username="leonard").exists())
+        self.assertTrue(User.objects.filter(username="leonard@example.com").exists())
 
     def test_a_token_without_the_password_deletes_nothing(self):
         # ⚠ The unlocked-phone-on-a-table case.
         r = self.delete(self.auth, "not-my-password")
         self.assertEqual(r.status_code, 403, "403, so the client does not sign out")
-        self.assertTrue(User.objects.filter(username="leonard").exists())
-        self.assertEqual(Person.objects.filter(owner__username="leonard").count(), 1)
+        self.assertTrue(User.objects.filter(username="leonard@example.com").exists())
+        self.assertEqual(Person.objects.filter(owner__username="leonard@example.com").count(), 1)
 
     def test_the_password_check_is_rate_limited(self):
         for _ in range(10):
             self.delete(self.auth, "guess")
         self.assertEqual(self.delete(self.auth, "a-long-passphrase-1").status_code, 429)
-        self.assertTrue(User.objects.filter(username="leonard").exists())
+        self.assertTrue(User.objects.filter(username="leonard@example.com").exists())
 
     def test_it_removes_the_account_everything_it_synced_and_every_device(self):
         second_device = self.client.post(
             "/auth/login",
-            data=json.dumps({"username": "leonard", "password": "a-long-passphrase-1"}),
+            data=json.dumps({"email": "leonard@example.com", "password": "a-long-passphrase-1"}),
             content_type="application/json",
         )
         mac = {"authorization": f"Bearer {body(second_device)['token']}"}
 
         self.assertEqual(self.delete(self.auth, "a-long-passphrase-1").status_code, 200)
 
-        self.assertFalse(User.objects.filter(username="leonard").exists())
-        # ⚠ Absolute counts. Filtering on owner__username="leonard" after the
+        self.assertFalse(User.objects.filter(username="leonard@example.com").exists())
+        # ⚠ Absolute counts. Filtering on owner__username="leonard@example.com" after the
         # user is gone matches nothing whether or not the rows survived.
         self.assertEqual(list(Person.objects.values_list("name", flat=True)), ["Bu Ratna"])
         self.assertEqual(OccasionTag.objects.count(), 1)
@@ -500,7 +500,7 @@ class AccountDeletionTests(TestCase):
 
     def test_the_username_can_start_again_empty(self):
         self.delete(self.auth, "a-long-passphrase-1")
-        fresh = self.register("leonard", "a-new-long-passphrase")
+        fresh = self.register("leonard@example.com", "a-new-long-passphrase")
         rows = json.loads(self.client.get("/sync", headers=fresh).content)["tables"]
         self.assertEqual(rows["people"], [])
 
@@ -520,7 +520,7 @@ class SignupLimitTests(TestCase):
     def signup(self, username, ip="10.0.0.1", password="a-long-passphrase-1"):
         return self.client.post(
             "/auth/register",
-            data=json.dumps({"username": username, "password": password}),
+            data=json.dumps({"email": username, "password": password}),
             content_type="application/json",
             REMOTE_ADDR=ip,
         )
@@ -528,26 +528,26 @@ class SignupLimitTests(TestCase):
     @override_settings(REGISTRATION_SECRET="")
     def test_the_sixth_account_from_one_network_in_an_hour_is_refused(self):
         for i in range(5):
-            self.assertEqual(self.signup(f"user{i}").status_code, 201)
-        r = self.signup("user5")
+            self.assertEqual(self.signup(f"user{i}@example.com").status_code, 201)
+        r = self.signup("user5@example.com")
         self.assertEqual(r.status_code, 429)
         self.assertIn("new accounts", body(r)["detail"])
-        self.assertFalse(User.objects.filter(username="user5").exists())
+        self.assertFalse(User.objects.filter(username="user5@example.com").exists())
 
     @override_settings(REGISTRATION_SECRET="")
     def test_another_network_is_unaffected(self):
         for i in range(5):
-            self.signup(f"user{i}")
-        self.assertEqual(self.signup("elsewhere", ip="10.0.0.2").status_code, 201)
+            self.signup(f"user{i}@example.com")
+        self.assertEqual(self.signup("elsewhere@example.com", ip="10.0.0.2").status_code, 201)
 
     @override_settings(REGISTRATION_SECRET="")
     def test_a_failed_signup_does_not_use_up_the_allowance(self):
         # Someone fumbling a taken name or a weak password is not abuse.
-        self.signup("taken")
+        self.signup("taken@example.com")
         for _ in range(6):
-            self.assertEqual(self.signup("taken").status_code, 409)
+            self.assertEqual(self.signup("taken@example.com").status_code, 409)
         for i in range(4):
-            self.assertEqual(self.signup(f"ok{i}").status_code, 201)
+            self.assertEqual(self.signup(f"ok{i}@example.com").status_code, 201)
 
 
 @override_settings(REGISTRATION_SECRET="", ACCOUNT_STORAGE_LIMIT_BYTES=3000)
@@ -556,13 +556,13 @@ class StorageLimitTests(TestCase):
 
     def setUp(self):
         cache.clear()
-        self.auth = self.register("leonard", "10.0.0.1")
-        self.other = self.register("sri", "10.0.0.2")
+        self.auth = self.register("leonard@example.com", "10.0.0.1")
+        self.other = self.register("sri@example.com", "10.0.0.2")
 
     def register(self, username, ip):
         r = self.client.post(
             "/auth/register",
-            data=json.dumps({"username": username, "password": "a-long-passphrase-1"}),
+            data=json.dumps({"email": username, "password": "a-long-passphrase-1"}),
             content_type="application/json",
             REMOTE_ADDR=ip,
         )
@@ -589,7 +589,7 @@ class StorageLimitTests(TestCase):
         self.assertEqual(r.status_code, 413)
         # ⚠ All or nothing: p1 fit on its own, and must not have been written.
         self.assertEqual(
-            sorted(Person.objects.filter(owner__username="leonard")
+            sorted(Person.objects.filter(owner__username="leonard@example.com")
                    .values_list("client_id", flat=True)), ["p0"])
 
     def test_a_full_account_can_still_edit_and_delete(self):
@@ -650,3 +650,60 @@ class PrivacyPolicyTests(TestCase):
         from core.privacy import POLICY_COVERS
         from core.sync import TABLES
         self.assertEqual(POLICY_COVERS, set(TABLES))
+
+
+class EmailAccountTests(TestCase):
+    """Accounts are identified by email (chosen over usernames: unique by
+    nature, and what a password reset would need)."""
+
+    def setUp(self):
+        cache.clear()
+
+    def signup(self, email, password="a-long-passphrase-1", key="email"):
+        return self.client.post(
+            "/auth/register",
+            data=json.dumps({key: email, "password": password}),
+            content_type="application/json",
+        )
+
+    def test_something_that_is_not_an_email_is_refused(self):
+        for bad in ("leonard", "leonard@", "@example.com", "leonard example.com"):
+            r = self.signup(bad)
+            self.assertEqual(r.status_code, 400, bad)
+            self.assertIn("email", body(r)["detail"])
+        self.assertEqual(User.objects.count(), 0)
+
+    def test_case_and_spacing_do_not_make_a_second_account(self):
+        # ⚠ Leonard@ and leonard@ are the same mailbox. Two accounts that look
+        # identical in a support request is a trap for later.
+        self.assertEqual(self.signup("  Leonard@Example.com  ").status_code, 201)
+        self.assertEqual(self.signup("leonard@example.com").status_code, 409)
+        self.assertEqual(
+            list(User.objects.values_list("username", flat=True)),
+            ["leonard@example.com"],
+        )
+
+    def test_signing_in_is_case_insensitive_too(self):
+        self.signup("leonard@example.com")
+        r = self.client.post(
+            "/auth/login",
+            data=json.dumps(
+                {"email": "LEONARD@example.com", "password": "a-long-passphrase-1"}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(body(r)["email"], "leonard@example.com")
+
+    def test_the_email_is_stored_where_a_password_reset_would_look(self):
+        self.signup("leonard@example.com")
+        user = User.objects.get(username="leonard@example.com")
+        self.assertEqual(user.email, "leonard@example.com")
+
+    def test_the_old_username_key_still_works(self):
+        # ⚠ The Mac build already installed sends "username". Refusing it would
+        # lock that copy out of a server it used to work with.
+        r = self.signup("leonard@example.com", key="username")
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(body(r)["email"], "leonard@example.com")
+        self.assertEqual(body(r)["username"], "leonard@example.com")

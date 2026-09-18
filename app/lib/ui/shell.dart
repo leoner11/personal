@@ -303,7 +303,7 @@ class _SyncLineState extends State<_SyncLine> {
     final token = _auth?.token;
     if (token == null) return;
     final engine = SyncEngine(widget.db,
-        baseUrl: kSyncBaseUrl, token: token, account: _auth?.username ?? '');
+        baseUrl: kSyncBaseUrl, token: token, account: _auth?.email ?? '');
     final at = await engine.run();
 
     // ⚠ This device and the account both hold data. Nothing has synced; ask.

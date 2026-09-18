@@ -24,6 +24,8 @@ import secrets
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError as FieldValidationError
+from django.core.validators import validate_email
 from django.contrib.auth.password_validation import (
     ValidationError,
     validate_password,
@@ -73,6 +75,23 @@ _SIGNUP_WINDOW_SECONDS = 3600
 
 def _signup_key(request) -> str:
     return f"signup:{request.META.get('REMOTE_ADDR', '?')}"
+
+
+def _account_id(data) -> str:
+    """The account identifier: an email address, normalised.
+
+    ⚠ LOWERCASED. Mail is case-insensitive in practice, and without this
+    Leonard@ and leonard@ become two accounts that look identical in a support
+    request and cannot both be reset.
+
+    ⚠ Accepts the old "username" key as well. The Mac build already installed
+    sends it, and refusing it would lock that copy out of a server it used to
+    work with. New clients send "email".
+    """
+    raw = data.get("email")
+    if raw is None:
+        raw = data.get("username")
+    return (raw or "").strip().lower()
 
 
 def _body(request):
@@ -126,23 +145,34 @@ def register(request):
     data = _body(request)
     if data is None:
         return JsonResponse({"detail": "invalid json"}, status=400)
-    username = (data.get("username") or "").strip()
+    email = _account_id(data)
     password = data.get("password") or ""
-    if not username or not password:
+    if not email or not password:
         return JsonResponse(
-            {"detail": "username and password are required"}, status=400
+            {"detail": "email and password are required"}, status=400
+        )
+    try:
+        validate_email(email)
+    except FieldValidationError:
+        return JsonResponse(
+            {"detail": "that does not look like an email address"}, status=400
         )
 
     with transaction.atomic():
-        if User.objects.filter(username=username).exists():
+        # ⚠ Stored in BOTH fields. username is what carries the unique
+        # constraint (User.email is not unique in Django), and email is what a
+        # password-reset flow would read if one is ever added.
+        if User.objects.filter(username=email).exists():
             return JsonResponse(
-                {"detail": "that username is taken"}, status=409
+                {"detail": "that email already has an account"}, status=409
             )
         try:
             validate_password(password)
         except ValidationError as e:
             return JsonResponse({"detail": " ".join(e.messages)}, status=400)
-        user = User.objects.create_user(username=username, password=password)
+        user = User.objects.create_user(
+            username=email, email=email, password=password
+        )
         token = _issue(user, data.get("device", ""))
 
     # Only a signup that happened counts: a taken username or a weak password
@@ -153,7 +183,12 @@ def register(request):
     except ValueError:
         pass
 
-    return JsonResponse({"token": token, "username": user.username}, status=201)
+    # ⚠ "username" is still sent, for the already-installed Mac build that
+    # reads it. Both keys carry the same value.
+    return JsonResponse(
+        {"token": token, "email": user.username, "username": user.username},
+        status=201,
+    )
 
 
 @csrf_exempt
@@ -168,18 +203,19 @@ def login(request):
         return JsonResponse({"detail": "invalid json"}, status=400)
 
     user = authenticate(
-        username=(data.get("username") or "").strip(),
-        password=data.get("password") or "",
+        username=_account_id(data), password=data.get("password") or ""
     )
     if user is None:
         _record_failure(request)
-        # ⚠ One message for both a wrong username and a wrong password. Saying
+        # ⚠ One message for both an unknown email and a wrong password. Saying
         # which was wrong tells an attacker when they have found the account.
         return JsonResponse({"detail": "invalid credentials"}, status=401)
 
-    return JsonResponse(
-        {"token": _issue(user, data.get("device", "")), "username": user.username}
-    )
+    return JsonResponse({
+        "token": _issue(user, data.get("device", "")),
+        "email": user.username,
+        "username": user.username,
+    })
 
 
 @csrf_exempt
@@ -239,4 +275,6 @@ def delete_account(request):
 def me(request):
     """Lets a client find out whether its stored token is still good without
     running a whole sync."""
-    return JsonResponse({"username": request.user.username})
+    return JsonResponse(
+        {"email": request.user.username, "username": request.user.username}
+    )
