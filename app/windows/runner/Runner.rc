@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "MJCX Studio" "\0"
+            VALUE "CompanyName", "Leonard Davidson" "\0"
             VALUE "FileDescription", "Personal" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "Personal" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 MJCX Studio. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Leonard Davidson. All rights reserved." "\0"
             VALUE "OriginalFilename", "Personal.exe" "\0"
             VALUE "ProductName", "Personal" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
