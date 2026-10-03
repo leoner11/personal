@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
+import '../../domain/auto_sync.dart';
 import '../../domain/notifications.dart';
 import '../../theme/tokens.dart';
 import '../widgets/app_icon.dart';
 import 'calendar_screen.dart';
 import 'capture_screen.dart';
+import 'money_screen.dart' show runSyncPulse, syncJoinDeferredLine;
 import 'people_screen.dart';
 import 'phone_primitives.dart';
 import 'review_screen.dart';
@@ -64,16 +66,44 @@ class PhoneShellState extends State<PhoneShell> {
     setState(() => _tab = tab);
   }
 
+  /// ⚠ SYNC IS AUTOMATIC (Leonard, after a week: Today, Calendar and tasks
+  /// only caught up after several pulls, because pull-to-refresh on Money or
+  /// Review was the only thing that ever synced). Same triggers as the Mac,
+  /// plus one the phone needs more: LEAVING the app. Capture-and-close is the
+  /// whole phone model, and waiting out the 5-second settle means the app is
+  /// already suspended when it ends.
+  late final AutoSync _auto;
+  late final AppLifecycleListener _life;
+
+  /// "Not now" on the combine-or-replace sheet. Automatic syncs then stay
+  /// quiet until the app is relaunched; a pull-to-refresh still asks again.
+  bool _joinDeferred = false;
+
   @override
   void initState() {
     super.initState();
     notificationTaps.addListener(_onNotificationTap);
+    _auto = AutoSync(run: _autoRun, changes: widget.db.watchDirtyCount());
+    _life = AppLifecycleListener(
+      onResume: _auto.resumed,
+      onHide: () => _auto.trigger(),
+    );
+    // After the first frame: the run may need to show the combine sheet.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _auto.trigger());
   }
 
   @override
   void dispose() {
     notificationTaps.removeListener(_onNotificationTap);
+    _life.dispose();
+    _auto.dispose();
     super.dispose();
+  }
+
+  Future<void> _autoRun() async {
+    if (!mounted || _joinDeferred) return;
+    final line = await runSyncPulse(context, widget.db);
+    if (line == syncJoinDeferredLine) _joinDeferred = true;
   }
 
   /// ⚠ The tap has to win over wherever the app was left. Someone who taps a
@@ -89,21 +119,17 @@ class PhoneShellState extends State<PhoneShell> {
       // ⚠ resizeToAvoidBottomInset stays true: the capture form must scroll
       // clear of the keyboard, since the keyboard is up the whole time it is
       // being used.
-      // ⚠ Tap anywhere that is not a control to put the keyboard away.
-      // Translucent so every tap still reaches the widget under it.
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: IndexedStack(
-          index: _tab.index,
-          children: [
-            CaptureScreen(db: widget.db),
-            PhoneTodayScreen(db: widget.db),
-            PhonePeopleScreen(db: widget.db),
-            PhoneCalendarScreen(db: widget.db),
-            PhoneReviewScreen(db: widget.db),
-          ],
-        ),
+      // Tapping away from a field is handled for the whole app, sheets and
+      // pushed screens included, by PhoneKeyboardDismisser in main.dart.
+      body: IndexedStack(
+        index: _tab.index,
+        children: [
+          CaptureScreen(db: widget.db),
+          PhoneTodayScreen(db: widget.db),
+          PhonePeopleScreen(db: widget.db),
+          PhoneCalendarScreen(db: widget.db),
+          PhoneReviewScreen(db: widget.db),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(

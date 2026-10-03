@@ -838,6 +838,28 @@ class TimelineEntry {
 
 /// What the sync engine needs from the database, and nothing else does.
 extension SyncQueries on AppDatabase {
+  /// Fires after any write to the user's data — an edit here or rows a sync
+  /// brought down. For screens that load once and must hear about both.
+  Stream<void> watchDataChanges() =>
+      tableUpdates(TableUpdateQuery.onAllTables(syncedTables));
+
+  /// How many rows are waiting to go up, re-counted after every write to a
+  /// synced table. The sync's own writes (pulled rows, cleared counters) come
+  /// through too, so callers must act only on a count above zero.
+  ///
+  /// ⚠ LISTENS TO THE DATA TABLES, NOT sync_state. The dirty counter is bumped
+  /// by SQLite triggers, which drift never hears about: watching sync_state,
+  /// an edit to a person never fires.
+  /// ⚠ NOT A drift query stream (`.watch()`). Cancelling one schedules a
+  /// teardown timer, and the Mac shell cancels this on every unmount — which
+  /// trips "Timer is still pending" in any widget test that shows the shell.
+  Stream<int> watchDirtyCount() => tableUpdates(TableUpdateQuery.onAllTables(
+          [syncStates, ...syncedTables]))
+      .asyncMap((_) => customSelect(
+            'SELECT COUNT(*) AS n FROM sync_state WHERE dirty > 0',
+            readsFrom: {syncStates},
+          ).map((r) => r.read<int>('n')).getSingle());
+
   /// id → change counter, for rows changed here since the server last saw them.
   Future<Map<String, int>> dirtyRows(String tbl) async {
     final rows = await (select(syncStates)

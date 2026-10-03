@@ -1,3 +1,5 @@
+import 'dart:math' show min;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
@@ -673,6 +675,17 @@ class PhoneSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppTokens.of(context);
     final h = MediaQuery.sizeOf(context).height;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    // ⚠ From the VIEW, not the sheet's MediaQuery: the modal route strips the
+    // top padding for its child, so inside the sheet the status bar reads 0.
+    final statusBar = MediaQueryData.fromView(View.of(context)).padding.top;
+    // ⚠ THE KEYBOARD COUNTS. The cap used to be a share of the whole screen,
+    // so with the keyboard up the sheet no longer fit and was pushed up under
+    // the clock and the Dynamic Island — every form's title unreadable
+    // (Leonard, 24 Sep, on Add money row, Edit project, Edit task). The form
+    // scrolls, so shrinking it costs nothing.
+    final room = h - keyboard - statusBar - PD.sheetTopGap;
+    final maxHeight = min(h * (expand ? 0.94 : 0.88), room);
     final body = Padding(
       padding: const EdgeInsets.fromLTRB(
         PD.screenPad,
@@ -684,7 +697,7 @@ class PhoneSheet extends StatelessWidget {
     );
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.only(bottom: keyboard),
       // ⚠ Material, not just a coloured Container — the same rule as
       // [PhoneScaffold]. TextField asserts on a missing Material ancestor, and
       // leaning on showModalBottomSheet to supply one makes every sheet here
@@ -695,7 +708,7 @@ class PhoneSheet extends StatelessWidget {
           top: Radius.circular(PD.sheetRadius),
         ),
         child: Container(
-          constraints: BoxConstraints(maxHeight: h * (expand ? 0.94 : 0.88)),
+          constraints: BoxConstraints(maxHeight: maxHeight),
           decoration: BoxDecoration(
             borderRadius: const BorderRadius.vertical(
               top: Radius.circular(PD.sheetRadius),
@@ -982,4 +995,47 @@ class PhoneDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Container(height: 1, color: AppTokens.of(context).line);
+}
+
+/// Puts the keyboard away on the phone, EVERYWHERE: every tab, every pushed
+/// screen and every sheet. Mounted once above the Navigator (MaterialApp's
+/// builder), so no screen can be added without it.
+///
+/// ⚠ The first fix lived inside the tab shell, which covered the five tabs
+/// and nothing pushed or shown on top of them — Tasks, Notes, a person, and
+/// every sheet kept a keyboard nobody could close (Leonard, 24 Sep: "for most
+/// pages the keyboard cannot be cancelled").
+///
+/// Two gestures, both the iOS norm:
+///   * a tap on anything that is not a control — translucent, and a control's
+///     own tap recognizer wins the arena, so no button loses its tap;
+///   * a vertical drag of a list or form.
+/// ⚠ NOT a drag inside a text field. A multi-line field scrolls its own text,
+/// and dropping the keyboard every time you scroll a note you are writing is
+/// worse than the bug.
+class PhoneKeyboardDismisser extends StatelessWidget {
+  const PhoneKeyboardDismisser({super.key, required this.child});
+  final Widget child;
+
+  static void _dismiss() => FocusManager.instance.primaryFocus?.unfocus();
+
+  bool _onScroll(ScrollUpdateNotification n) {
+    if (n.dragDetails != null &&
+        n.metrics.axis == Axis.vertical &&
+        n.context?.findAncestorWidgetOfExactType<EditableText>() == null) {
+      _dismiss();
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => NotificationListener<
+          ScrollUpdateNotification>(
+        onNotification: _onScroll,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _dismiss,
+          child: child,
+        ),
+      );
 }

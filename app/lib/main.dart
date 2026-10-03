@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show Timer, unawaited;
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -12,6 +12,7 @@ import 'ui/phone/money_screen.dart';
 import 'ui/phone/notes_screen.dart';
 import 'ui/phone/calendar_screen.dart';
 import 'ui/phone/occasion_tag_sheets.dart';
+import 'ui/phone/phone_primitives.dart' show PhoneKeyboardDismisser;
 import 'ui/phone/phone_shell.dart';
 import 'ui/phone/projects_screen.dart';
 import 'ui/phone/tasks_list_screen.dart';
@@ -24,7 +25,36 @@ bool get isDesktop => Platform.isMacOS || Platform.isWindows || Platform.isLinux
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // ⚠ NEVER A BLANK SCREEN. Everything below runs before the first frame, so
+  // an error in it used to leave a white screen with nothing to read — which
+  // is exactly what the phone showed on 24 Sep. Now it says what failed.
+  // A step that never returns is as blank as one that throws, so a slow
+  // start also says which step it is waiting on.
+  var started = false;
+  final watchdog = Timer(const Duration(seconds: 15), () {
+    if (!started) {
+      runApp(_StartupError(
+          error: 'Still starting after 15s, waiting on: $_startStep',
+          stack: StackTrace.empty));
+    }
+  });
+  try {
+    await _start();
+    started = true;
+  } catch (e, st) {
+    started = true;
+    runApp(_StartupError(error: 'Failed at: $_startStep\n$e', stack: st));
+  } finally {
+    watchdog.cancel();
+  }
+}
+
+/// The startup step in progress, named in the error screen.
+String _startStep = 'begin';
+
+Future<void> _start() async {
   if (isDesktop) await _setUpWindow();
+  _startStep = 'open database';
   final db = AppDatabase();
 
   // Seed three years of occasions on first launch, then rebuild every pending
@@ -33,16 +63,19 @@ Future<void> main() async {
   // ⚠ TAGS BEFORE OCCASIONS. backfillSeedOccasions now refuses to seed dates
   // for a tag that is not in the table, so seeding the vocabulary second would
   // skip every festival on a virgin database and leave it permanently empty.
+  _startStep = 'seed tags (first database read)';
   await seedBuiltInTags(db);
   // ⚠ Bound before the first frame: chips and person rows resolve slugs to
   // labels out of this, and an unbound vocabulary draws every tag as its raw
   // slug until the first rebuild.
   TagVocab.bind(db);
+  _startStep = 'seed occasions';
   await seedIfEmpty(db);
   // ⚠ And top up anything added to the seed since this database was created.
   // Without it a new occasion tag is visible on the capture screen while the
   // calendar behind it stays empty, and nothing ever fires.
   await backfillSeedOccasions(db);
+  _startStep = 'notifications';
   final notifier = Notifier(db);
   await notifier.init();
   await notifier.rescheduleAll();
@@ -51,6 +84,7 @@ Future<void> main() async {
   // ⚠ Loaded BEFORE the first frame so the UI never flashes "signed out" at
   // someone who is signed in — the Keychain read is async and a frame is not.
   // Note this does not gate anything: the app runs identically either way.
+  _startStep = 'sign-in state';
   final auth = AuthState();
   await auth.load();
   appAuth = auth;
@@ -58,9 +92,34 @@ Future<void> main() async {
   // ⚠ Read BEFORE the first frame. If the app was launched by tapping a
   // reminder, the first screen must be Today — asking afterwards means the
   // user watches it jump.
+  _startStep = 'launch notification';
   final fromNotification = await notifier.launchedFromNotification();
 
   runApp(App(db: db, openOnToday: fromNotification));
+}
+
+/// What the app shows when it could not start. Plain on purpose: it must
+/// render even if the theme or the database is what broke.
+class _StartupError extends StatelessWidget {
+  const _StartupError({required this.error, required this.stack});
+  final Object error;
+  final StackTrace stack;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: SelectableText(
+                'Personal could not start.\n\n$error\n\n$stack',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 Future<void> _setUpWindow() async {
@@ -149,6 +208,10 @@ class _AppState extends State<App> {
         // survive a 390pt screen, and a responsive breakpoint between them
         // would mean the density table, the keyboard map and every hover
         // action had to work at both ends. They do not.
+        // Above the Navigator, so it reaches pushed screens and sheets too.
+        builder: isDesktop
+            ? null
+            : (context, child) => PhoneKeyboardDismisser(child: child!),
         home: isDesktop
             ? Shell(db: widget.db)
             : _phoneHome(context),

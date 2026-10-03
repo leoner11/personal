@@ -6,6 +6,7 @@ import 'package:personal_crm/domain/notifications.dart';
 import 'package:personal_crm/main.dart';
 import 'package:personal_crm/theme/tokens.dart';
 import 'package:personal_crm/ui/phone/capture_screen.dart';
+import 'package:personal_crm/ui/phone/phone_primitives.dart' show PhoneKeyboardDismisser;
 import 'package:personal_crm/ui/phone/phone_shell.dart';
 import 'package:personal_crm/domain/tag_vocab.dart';
 
@@ -39,6 +40,8 @@ void main() {
 
   Widget host(Widget child) => MaterialApp(
         theme: buildTheme(Brightness.light),
+        // As main.dart mounts it on the phone.
+        builder: (context, child) => PhoneKeyboardDismisser(child: child!),
         home: MediaQuery(
           data: const MediaQueryData(size: Size(390, 844)),
           child: child,

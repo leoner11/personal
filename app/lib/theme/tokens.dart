@@ -222,6 +222,10 @@ abstract final class PD {
   /// The phone's own sheet radius. Desktop parity holds for panels (8),
   /// controls (6) and tags (4); a sheet is the one surface that earns more.
   static const sheetRadius = 16.0;
+
+  /// The least space a sheet leaves above itself, below the status bar, so
+  /// the page behind still shows and the sheet reads as a sheet.
+  static const sheetTopGap = 12.0;
 }
 
 /// Design system density table. Flutter's defaults target touch and will

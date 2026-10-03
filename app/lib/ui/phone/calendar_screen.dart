@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
+import '../../domain/reload_on_change.dart';
 import '../../domain/agenda.dart';
 import '../../domain/ics.dart';
 import '../../domain/money_fmt.dart';
@@ -277,14 +278,24 @@ class _MonthPageState extends State<_MonthPage> {
     });
   }
 
+  /// ⚠ Without this the grid only reloaded after its own sheets: a task
+  /// added from Today or Review, or anything a sync brought down, stayed off
+  /// the calendar until the month was swiped away and back.
+  late final ReloadOnChange _changes;
+
   @override
   void initState() {
     super.initState();
     widget.revision.addListener(_reload);
+    _changes = ReloadOnChange(widget.db.watchDataChanges(), () {
+      _reload();
+      return _agenda;
+    });
   }
 
   @override
   void dispose() {
+    _changes.dispose();
     widget.revision.removeListener(_reload);
     super.dispose();
   }

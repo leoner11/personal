@@ -38,7 +38,24 @@ import 'sync_join_sheet.dart';
 /// desktop shell enforces the same conjunction. When either is missing the
 /// pulse says so instead of spinning at nothing; local queries are never
 /// faked into a reload.
-Future<String> runSyncPulse(BuildContext context, AppDatabase db) async {
+///
+/// ⚠ ONE AT A TIME. The shell syncs on its own now and a pull can land in the
+/// middle of that; the pull then waits for the run in flight and reports it,
+/// instead of pushing the same rows a second time alongside it.
+Future<String> runSyncPulse(BuildContext context, AppDatabase db) {
+  final running = _pulseInFlight;
+  if (running != null) return running;
+  final pulse = _runSyncPulse(context, db);
+  _pulseInFlight = pulse;
+  return pulse.whenComplete(() => _pulseInFlight = null);
+}
+
+Future<String>? _pulseInFlight;
+
+/// What the pulse says after "Not now" on the combine-or-replace sheet.
+const syncJoinDeferredLine = 'Not synced — choose how to combine first';
+
+Future<String> _runSyncPulse(BuildContext context, AppDatabase db) async {
   if (!kSyncEnabled) return 'No server configured';
   final auth = appAuth;
   final token = auth?.token;
@@ -55,7 +72,7 @@ Future<String> runSyncPulse(BuildContext context, AppDatabase db) async {
   if (join != null) {
     if (!context.mounted) return 'Choose how to sync this device';
     final choice = await PhoneSyncJoinSheet.show(context, join);
-    if (choice == null) return 'Not synced — choose how to combine first';
+    if (choice == null) return syncJoinDeferredLine;
     at = await completeJoin(db, engine, choice,
         backupPath: choice == JoinChoice.useAccount
             ? await replaceBackupPath()

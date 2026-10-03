@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/notifications.dart';
+import '../../domain/reload_on_change.dart';
 import '../../domain/tasks.dart';
 import '../../domain/today.dart';
 import '../../theme/tokens.dart';
@@ -44,6 +45,27 @@ class _TodayScreenState extends State<TodayScreen> {
     setState(() {
       _future = loadToday(widget.db);
     });
+  }
+
+  /// ⚠ Sync runs on its own now, so rows arrive from the phone while this
+  /// screen is open. Loaded once, it would show them only after a navigation.
+  late final ReloadOnChange _changes =
+      ReloadOnChange(widget.db.watchDataChanges(), () {
+    if (!mounted) return Future.value();
+    _refresh();
+    return _future;
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    _changes; // late: start listening now
+  }
+
+  @override
+  void dispose() {
+    _changes.dispose();
+    super.dispose();
   }
 
   @override

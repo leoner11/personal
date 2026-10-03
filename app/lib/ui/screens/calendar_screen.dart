@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/agenda.dart';
+import '../../domain/reload_on_change.dart';
 import '../../domain/money_fmt.dart';
 import '../../theme/tokens.dart';
 import '../meeting_sheet.dart';
@@ -45,7 +46,35 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return loadAgenda(widget.db, from: start, to: start.add(const Duration(days: 56)));
   }
 
-  void _reload() => setState(() => _agenda = _load());
+  // ⚠ Block body, not an arrow: `() => _agenda = _load()` returns the
+  // assigned Future and setState asserts on that. Debug builds threw on every
+  // reload; release builds skip the assert, so it went unnoticed.
+  void _reload() {
+    setState(() {
+      _agenda = _load();
+    });
+  }
+
+  /// ⚠ Sync runs on its own now, so rows arrive from the phone while this
+  /// screen is open. Loaded once, it would show them only after a navigation.
+  late final ReloadOnChange _changes =
+      ReloadOnChange(widget.db.watchDataChanges(), () {
+    if (!mounted) return Future.value();
+    _reload();
+    return _agenda;
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    _changes; // late: start listening now
+  }
+
+  @override
+  void dispose() {
+    _changes.dispose();
+    super.dispose();
+  }
 
   void _go(int months) => setState(() {
         _month = DateTime(_month.year, _month.month + months);

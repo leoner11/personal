@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/money_fmt.dart';
 import '../../domain/notifications.dart';
+import '../../domain/reload_on_change.dart';
 import '../../domain/tasks.dart';
 import '../../domain/today.dart';
 import '../../theme/tokens.dart';
@@ -58,14 +59,21 @@ class _PhoneTodayScreenState extends State<PhoneTodayScreen> {
   final _quickController = TextEditingController();
   final _quickFocus = FocusNode();
 
+  /// ⚠ Today is built once, at launch, inside the shell's IndexedStack. Without
+  /// this it only reloaded after its own sheets — a task added from Review, or
+  /// anything a sync brought down, stayed invisible until a pull.
+  late final ReloadOnChange _changes;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _changes = ReloadOnChange(widget.db.watchDataChanges(), _load);
   }
 
   @override
   void dispose() {
+    _changes.dispose();
     _quickController.dispose();
     _quickFocus.dispose();
     super.dispose();
@@ -242,7 +250,11 @@ class _PhoneTodayScreenState extends State<PhoneTodayScreen> {
         // The one refresh affordance (§3.4): pulses the sync, nothing else.
         color: t.accent,
         backgroundColor: t.card,
-        onRefresh: _load,
+        // ⚠ It used to call _load alone, so pulling Today never synced.
+        onRefresh: () async {
+          await runSyncPulse(context, widget.db);
+          await _load();
+        },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(

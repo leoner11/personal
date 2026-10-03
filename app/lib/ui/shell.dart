@@ -6,6 +6,7 @@ import 'add_person_sheet.dart';
 import '../domain/config.dart';
 import '../domain/money_fmt.dart';
 import '../domain/auth.dart';
+import '../domain/auto_sync.dart';
 import '../domain/sync.dart';
 import '../domain/sync_account.dart';
 import 'sync_join_dialog.dart';
@@ -272,27 +273,54 @@ class _SyncLineState extends State<_SyncLine> {
   /// token is no longer compiled in, so "configured" alone is not enough.
   bool get _canSync => kSyncEnabled && (_auth?.signedIn ?? false);
 
+  /// ⚠ SYNC IS AUTOMATIC. Leonard, after a week of use: pressing Sync now
+  /// every time is the one thing wrong with the Mac. Every run goes through
+  /// [_auto], including the manual button, so two can never overlap.
+  late final AutoSync _auto;
+  late final AppLifecycleListener _life;
+
+  /// "Not now" on the combine-or-replace question. Automatic syncs then stay
+  /// quiet until a sign-in, a relaunch or Sync now — otherwise the timer would
+  /// put the same question back on screen every few minutes.
+  bool _joinDeferred = false;
+
   @override
   void initState() {
     super.initState();
     _auth?.addListener(_onAuth);
-    if (_canSync) _run();
+    _auto = AutoSync(run: _autoRun, changes: widget.db.watchDirtyCount());
+    // On the Mac, resumed = the window got focus back.
+    _life = AppLifecycleListener(onResume: _auto.resumed);
+    if (_canSync) _auto.trigger();
   }
 
   @override
   void dispose() {
     _auth?.removeListener(_onAuth);
+    _life.dispose();
+    _auto.dispose();
     super.dispose();
+  }
+
+  Future<void> _autoRun() async {
+    if (!mounted || !_canSync || _joinDeferred) return;
+    await _run();
   }
 
   void _onAuth() {
     if (!mounted) return;
     setState(() {});
-    if (_canSync) _run();
+    _joinDeferred = false;
+    if (_canSync) _auto.trigger();
+  }
+
+  void _syncNow() {
+    _joinDeferred = false;
+    _auto.trigger();
   }
 
   Future<void> _open() async {
-    await AccountDialog.show(context, onSyncNow: _canSync ? _run : null);
+    await AccountDialog.show(context, onSyncNow: _canSync ? _syncNow : null);
   }
 
   /// True while the combine-or-replace dialog is up. Sync runs on every auth
@@ -317,6 +345,7 @@ class _SyncLineState extends State<_SyncLine> {
       _asking = true;
       final choice = await SyncJoinDialog.show(context, join);
       _asking = false;
+      if (choice == null) _joinDeferred = true;
       if (choice == null || !mounted) return;
       await completeJoin(widget.db, engine, choice,
           backupPath: choice == JoinChoice.useAccount
