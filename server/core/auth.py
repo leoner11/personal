@@ -30,12 +30,16 @@ from django.contrib.auth.password_validation import (
     ValidationError,
     validate_password,
 )
+from django.conf import settings
 from django.core.cache import cache
+from django.core.mail import send_mail
 from django.db import transaction
 from django.http import JsonResponse
+from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import AuthToken
+from .models import AuthToken, PasswordReset
 
 # ⚠ A public login endpoint with no limit is a free password oracle. This is
 # per-process and in local memory, so it is a speed bump rather than a wall —
@@ -122,8 +126,6 @@ def register(request):
     """Create an account. Open unless REGISTRATION_SECRET is set."""
     if request.method != "POST":
         return JsonResponse({"detail": "method not allowed"}, status=405)
-
-    from django.conf import settings
 
     # Optional gate. Unset = open signup; set = an invite code is required.
     secret = settings.REGISTRATION_SECRET
@@ -216,6 +218,158 @@ def login(request):
         "email": user.username,
         "username": user.username,
     })
+
+
+# ⚠ A SIX-DIGIT CODE, typed into the app — not a link. There is no web page on
+# this server for a link to open, and a code works the same on a phone whose
+# mail lives on another device. Short enough to guess, so it is the limits
+# below that make it safe, not the code.
+_RESET_TTL_SECONDS = 15 * 60
+_RESET_MAX_TRIES = 5
+# One mail per account per minute: "send it again" must not become a way to
+# fill someone else's inbox.
+_RESET_RESEND_SECONDS = 60
+
+# ⚠ ONE ANSWER whether or not the address has an account, for the same reason
+# login gives one answer for a wrong email and a wrong password.
+_RESET_SENT = "if that email has an account, a code is on its way"
+_RESET_BAD_CODE = "that code is not right or has expired"
+
+
+def _hash_code(user, code: str) -> str:
+    """⚠ Keyed with SECRET_KEY and the account, unlike hash_token. A token is
+    256 random bits; this is one of a million values, and a plain hash of it
+    in a leaked backup is reversed by trying all of them."""
+    return salted_hmac(
+        "core.auth.reset", f"{user.pk}:{code}", algorithm="sha256"
+    ).hexdigest()
+
+
+@csrf_exempt
+def reset_request(request):
+    """POST /auth/reset/request {email} — emails a code to the account's
+    address. Nothing about the account changes until the code comes back."""
+    if request.method != "POST":
+        return JsonResponse({"detail": "method not allowed"}, status=405)
+    if not settings.PASSWORD_RESET_ENABLED:
+        # ⚠ LOUD, like /privacy without a contact. A server with no mail set
+        # up that answered "a code is on its way" would leave someone waiting
+        # for an email that cannot come.
+        return JsonResponse(
+            {"detail": "password reset is not set up on this server"},
+            status=503,
+        )
+    if _too_many(request):
+        return JsonResponse({"detail": "too many attempts"}, status=429)
+
+    data = _body(request)
+    if data is None:
+        return JsonResponse({"detail": "invalid json"}, status=400)
+    email = _account_id(data)
+    if not email:
+        return JsonResponse({"detail": "email is required"}, status=400)
+
+    # ⚠ Every request counts toward the limit, found or not: this endpoint
+    # sends mail, and an unlimited one is a way to spam strangers from our
+    # address.
+    _record_failure(request)
+
+    user = User.objects.filter(username=email, is_active=True).first()
+    if user is None:
+        return JsonResponse({"detail": _RESET_SENT})
+
+    now = timezone.now()
+    pending = PasswordReset.objects.filter(user=user).first()
+    if (
+        pending is not None
+        and (now - pending.sent_at).total_seconds() < _RESET_RESEND_SECONDS
+    ):
+        return JsonResponse({"detail": _RESET_SENT})
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    try:
+        send_mail(
+            "Your Personal password reset code",
+            f"Your code is {code}\n\n"
+            "Enter it in the app to choose a new password. It works for 15 "
+            "minutes.\n\n"
+            "If you did not ask for this, ignore this email: your password "
+            "has not changed.\n",
+            None,
+            [user.email or user.username],
+        )
+    except Exception:
+        # ⚠ Not stored: a code nobody received must not sit there live.
+        return JsonResponse(
+            {"detail": "the email could not be sent, try again later"},
+            status=502,
+        )
+    PasswordReset.objects.update_or_create(
+        user=user,
+        defaults={"code_hash": _hash_code(user, code), "sent_at": now, "tries": 0},
+    )
+    return JsonResponse({"detail": _RESET_SENT})
+
+
+@csrf_exempt
+def reset_confirm(request):
+    """POST /auth/reset/confirm {email, code, password, device} — sets the new
+    password and signs this device in, answering like /auth/login.
+
+    ⚠ EVERY OTHER DEVICE IS SIGNED OUT. Someone resets a password because they
+    forgot it or because somebody else has it, and in the second case the
+    tokens already issued are the problem. Their local data is untouched."""
+    if request.method != "POST":
+        return JsonResponse({"detail": "method not allowed"}, status=405)
+    if _too_many(request):
+        return JsonResponse({"detail": "too many attempts"}, status=429)
+
+    data = _body(request)
+    if data is None:
+        return JsonResponse({"detail": "invalid json"}, status=400)
+    code = str(data.get("code") or "").strip()
+    password = data.get("password") or ""
+    if not code or not password:
+        return JsonResponse(
+            {"detail": "code and password are required"}, status=400
+        )
+
+    user = User.objects.filter(username=_account_id(data), is_active=True).first()
+    pending = (
+        PasswordReset.objects.filter(user=user).first() if user else None
+    )
+    if pending is None:
+        _record_failure(request)
+        return JsonResponse({"detail": _RESET_BAD_CODE}, status=400)
+    age = (timezone.now() - pending.sent_at).total_seconds()
+    if age > _RESET_TTL_SECONDS or pending.tries >= _RESET_MAX_TRIES:
+        pending.delete()
+        _record_failure(request)
+        return JsonResponse({"detail": _RESET_BAD_CODE}, status=400)
+    if not secrets.compare_digest(pending.code_hash, _hash_code(user, code)):
+        # ⚠ Counted on the CODE, not only on the network: the per-IP limit
+        # alone lets a million guesses through from enough addresses.
+        pending.tries += 1
+        pending.save(update_fields=["tries"])
+        _record_failure(request)
+        return JsonResponse({"detail": _RESET_BAD_CODE}, status=400)
+
+    try:
+        validate_password(password, user)
+    except ValidationError as e:
+        # ⚠ The code survives a weak password: it was right, and making them
+        # wait for a second email over a too-short password helps nobody.
+        return JsonResponse({"detail": " ".join(e.messages)}, status=422)
+
+    with transaction.atomic():
+        user.set_password(password)
+        user.save(update_fields=["password"])
+        pending.delete()
+        AuthToken.objects.filter(user=user).delete()
+        token = _issue(user, data.get("device", ""))
+    return JsonResponse(
+        {"token": token, "email": user.username, "username": user.username}
+    )
 
 
 @csrf_exempt

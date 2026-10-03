@@ -121,6 +121,8 @@ more** — it comes from signing in.
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Was `*`. Set it to the real host. |
 | `DJANGO_DEBUG` | off | On, a 500 shows settings and locals to whoever triggered it. |
 | `PRIVACY_CONTACT_EMAIL` | unset | Shown on `/privacy` (the App Store policy URL). Unset, the page answers 503 so a missing contact can't go unnoticed. |
+| `SUPPORT_CONTACT_EMAIL` | the privacy contact | Shown on `/terms` and `/support` (the App Store support URL). |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_FROM` | unset | SMTP for the password reset code, any provider (port 587 STARTTLS, or 465). Unset, `/auth/reset/request` answers 503 and the app says reset is unavailable. |
 | `ACCOUNT_STORAGE_LIMIT_BYTES` | `100000000` (100MB) | Per-account cap, because signup is open. Real text-only use is kilobytes; the cap stops one account filling a 10GB disk (14 daily backups multiply what is stored). `0` = no cap. |
 
 ### What is actually exposed

@@ -91,6 +91,16 @@ REGISTRATION_SECRET=
 # Contact address shown on https://$DOMAIN/privacy. Until it is set, that page
 # answers 503 — the App Store needs it before submission.
 PRIVACY_CONTACT_EMAIL=
+# Shown on /terms and /support. Empty = the privacy contact is used.
+SUPPORT_CONTACT_EMAIL=
+# SMTP for the password reset code — any provider. Until EMAIL_HOST is set,
+# "Forgot password?" answers 503 instead of promising a mail that cannot come.
+# EMAIL_FROM must be an address the provider lets this login send as.
+EMAIL_HOST=
+EMAIL_PORT=587
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=
+EMAIL_FROM=
 # DJANGO_DEBUG deliberately absent. Present and set to 1, a 500 serves your
 # settings and local variables to whoever triggered it.
 EOF

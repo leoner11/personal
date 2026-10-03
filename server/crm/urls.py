@@ -18,21 +18,27 @@ import os
 
 from django.urls import path
 
-from core.auth import delete_account, login, logout, me, register
-from core.privacy import privacy
+from core.auth import (delete_account, login, logout, me, register,
+                       reset_confirm, reset_request)
+from core.privacy import privacy, support, terms
 from core.sync import sync
 
 # ⚠ No /admin. See INSTALLED_APPS in settings.py for why it was removed rather
 # than merely hidden.
 #
-# /auth/register and /auth/login are the only unauthenticated routes; everything
-# else goes through BearerTokenMiddleware.
+# Register, login, the two reset routes and the three public pages are the only
+# unauthenticated routes (core/middleware.PUBLIC_PATHS); everything else goes
+# through BearerTokenMiddleware.
 urlpatterns = [
     path('auth/register', register),
     path('auth/login', login),
     path('auth/logout', logout),
     path('auth/me', me),
     path('auth/delete', delete_account),
+    path('auth/reset/request', reset_request),
+    path('auth/reset/confirm', reset_confirm),
     path('privacy', privacy),
+    path('terms', terms),
+    path('support', support),
     path('sync', sync),
 ]

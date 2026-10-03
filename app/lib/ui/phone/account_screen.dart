@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import '../../data/database.dart';
 import '../../domain/auth.dart';
-import '../../domain/channel.dart' show openPrivacyPolicy;
+import '../../domain/channel.dart' show openInfoPage;
 import '../../domain/config.dart';
 import '../../domain/money_fmt.dart' show fmtAgo;
 import '../../domain/sync.dart';
@@ -266,6 +266,23 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
                             _registering = !_registering;
                             _error = null;
                           })),
+              // ⚠ Sign-in mode only, and it carries the typed email across:
+              // the person who needs this has usually just failed to sign in
+              // with that address.
+              if (!_registering) ...[
+                const SizedBox(height: PD.groupGap),
+                PhoneBtn('Forgot password?',
+                    variant: PhoneBtnVariant.ghost,
+                    expand: true,
+                    onPressed: _busy
+                        ? null
+                        : () => PhoneSheet.show<void>(
+                            context,
+                            (_) => PhoneResetPasswordSheet(
+                                auth: widget.auth,
+                                device: _device,
+                                email: _email.text.trim()))),
+              ],
             ],
             // ⚠ In EVERY state, signed in or not, and last in the list:
             // findable without being in the way. App Store guideline 5.1.1(i)
@@ -276,7 +293,17 @@ class _PhoneAccountScreenState extends State<PhoneAccountScreen> {
               PhoneRow(
                 title: 'Privacy policy',
                 chevron: true,
-                onTap: () => openPrivacyPolicy(_policyUrl),
+                onTap: () => openInfoPage(_policyUrl),
+              ),
+              PhoneRow(
+                title: 'Terms of service',
+                chevron: true,
+                onTap: () => openInfoPage(kTermsUrl),
+              ),
+              PhoneRow(
+                title: 'Help and support',
+                chevron: true,
+                onTap: () => openInfoPage(kSupportUrl),
               ),
             ],
           ],
@@ -465,6 +492,167 @@ class PhoneDeleteAccountSheetState extends State<PhoneDeleteAccountSheet> {
   }
 }
 
+/// A forgotten password: email → six-digit code → new password. Succeeding
+/// signs this phone in, so the sheet closes onto the signed-in card.
+class PhoneResetPasswordSheet extends StatefulWidget {
+  const PhoneResetPasswordSheet(
+      {super.key, required this.auth, required this.device, this.email = ''});
+  final AuthState auth;
+  final String device;
+  final String email;
+
+  @override
+  State<PhoneResetPasswordSheet> createState() =>
+      _PhoneResetPasswordSheetState();
+}
+
+class _PhoneResetPasswordSheetState extends State<PhoneResetPasswordSheet> {
+  late final _email = TextEditingController(text: widget.email);
+  final _code = TextEditingController();
+  final _password = TextEditingController();
+
+  /// The address the code was asked for. Null = still on the first step.
+  String? _sentTo;
+  bool _reveal = false;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final c in [_email, _code, _password]) {
+      c.addListener(() => setState(() {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _code.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(Future<void> Function() step) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await step();
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      // Same rule as sign-in: a failure the user cannot see is the worst kind.
+      if (mounted) setState(() => _error = 'This device could not finish: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _send() => _run(() async {
+        final email = _email.text.trim();
+        await widget.auth.requestPasswordReset(email);
+        if (mounted) setState(() => _sentTo = email);
+      });
+
+  Future<void> _confirm() => _run(() async {
+        await widget.auth.resetPassword(
+          email: _sentTo!,
+          code: _code.text.trim(),
+          password: _password.text,
+          device: widget.device,
+        );
+        if (mounted) Navigator.pop(context);
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    final asking = _sentTo == null;
+    final ready = asking
+        ? looksLikeEmail(_email.text)
+        : _code.text.trim().length == 6 && _password.text.isNotEmpty;
+    return PhoneSheet(
+      title: 'Reset password',
+      actions: Row(children: [
+        Expanded(
+          child: PhoneBtn('Cancel',
+              variant: PhoneBtnVariant.ghost,
+              onPressed: _busy ? null : () => Navigator.pop(context)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: PhoneBtn(
+              _busy ? 'Working…' : (asking ? 'Send code' : 'Set password'),
+              variant: PhoneBtnVariant.primary,
+              onPressed:
+                  _busy || !ready ? null : (asking ? _send : _confirm)),
+        ),
+      ]),
+      child: AbsorbPointer(
+        absorbing: _busy,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (asking) ...[
+              Text(
+                  'We email a six-digit code to the address on your account. '
+                  'Enter it here to choose a new password.',
+                  style: PT.secondary.copyWith(color: t.textSecondary)),
+              const SizedBox(height: PD.sectionGap),
+              PhoneField(
+                  label: 'Email',
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.none),
+            ] else ...[
+              Text(resetCodeSentLine(_sentTo!),
+                  style: PT.secondary.copyWith(color: t.textSecondary)),
+              const SizedBox(height: PD.sectionGap),
+              PhoneField(
+                  label: 'Code',
+                  controller: _code,
+                  keyboardType: TextInputType.number,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.none),
+              const SizedBox(height: PD.groupGap),
+              _PasswordField(
+                label: 'New password',
+                controller: _password,
+                reveal: _reveal,
+                onToggle: () => setState(() => _reveal = !_reveal),
+              ),
+              const SizedBox(height: PD.groupGap),
+              Text(resetPasswordExplainer,
+                  style: PT.secondary.copyWith(color: t.textMuted)),
+              const SizedBox(height: 4),
+              // Back to the first step: a typo in the address, or a code
+              // that never came.
+              PhoneBtn('Use a different email or send again',
+                  variant: PhoneBtnVariant.ghost,
+                  expand: true,
+                  onPressed: () => setState(() {
+                        _sentTo = null;
+                        _error = null;
+                        _code.clear();
+                      })),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!,
+                  style: PT.secondary.copyWith(color: t.danger.text)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Obscured by default; the 44pt eye reveals it. ⚠ While revealed, the visible
 /// text IS the state — the icon never swaps to a second glyph. Excluded from
 /// autocorrect and suggestions either way: an iOS keyboard must never learn
@@ -474,7 +662,9 @@ class _PasswordField extends StatelessWidget {
     required this.controller,
     required this.reveal,
     required this.onToggle,
+    this.label = 'Password',
   });
+  final String label;
   final TextEditingController controller;
   final bool reveal;
   final VoidCallback onToggle;
@@ -483,7 +673,7 @@ class _PasswordField extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppTokens.of(context);
     return PhoneField(
-      label: 'Password',
+      label: label,
       controller: controller,
       obscure: !reveal,
       autocorrect: false,

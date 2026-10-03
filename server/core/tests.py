@@ -760,3 +760,174 @@ class NullTolerantPushTests(TestCase):
     def test_a_nullable_date_is_still_stored_as_null(self):
         self.push({"people": [{"id": "p1", "name": "Pak Andi", "met_when": None}]})
         self.assertIsNone(Person.objects.get(client_id="p1").met_when)
+
+
+@override_settings(PASSWORD_RESET_ENABLED=True)
+class PasswordResetTests(TestCase):
+    """A forgotten password, recovered with a code emailed to the account."""
+
+    EMAIL = "leonard@example.com"
+    OLD = "a-long-passphrase-1"
+    NEW = "another-long-passphrase-2"
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            username=self.EMAIL, email=self.EMAIL, password=self.OLD)
+
+    def post(self, path, payload):
+        return self.client.post(
+            path, data=json.dumps(payload), content_type="application/json")
+
+    def ask(self, email=None):
+        return self.post("/auth/reset/request", {"email": email or self.EMAIL})
+
+    def confirm(self, code, password=None, email=None):
+        return self.post("/auth/reset/confirm", {
+            "email": email or self.EMAIL, "code": code,
+            "password": password or self.NEW, "device": "iPhone"})
+
+    def code(self):
+        from django.core import mail
+        import re
+        return re.search(r"\b(\d{6})\b", mail.outbox[-1].body).group(1)
+
+    def login(self, password):
+        return self.post("/auth/login", {"email": self.EMAIL, "password": password})
+
+    def test_the_code_sets_a_new_password_and_signs_the_device_in(self):
+        from django.core import mail
+        self.assertEqual(self.ask().status_code, 200)
+        self.assertEqual(mail.outbox[-1].to, [self.EMAIL])
+        r = self.confirm(self.code())
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(body(r)["email"], self.EMAIL)
+        token = body(r)["token"]
+        self.assertEqual(
+            self.client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code, 200)
+        self.assertEqual(self.login(self.NEW).status_code, 200)
+        self.assertEqual(self.login(self.OLD).status_code, 401)
+
+    def test_an_unknown_email_gets_the_same_answer_and_no_mail(self):
+        from django.core import mail
+        known, unknown = self.ask(), self.ask("nobody@example.com")
+        self.assertEqual(unknown.status_code, known.status_code)
+        self.assertEqual(body(unknown), body(known))
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_only_a_hash_of_the_code_is_stored(self):
+        from core.models import PasswordReset
+        self.ask()
+        self.assertNotIn(self.code(), PasswordReset.objects.get().code_hash)
+
+    def test_a_wrong_code_changes_nothing(self):
+        self.ask()
+        wrong = "000000" if self.code() != "000000" else "111111"
+        self.assertEqual(self.confirm(wrong).status_code, 400)
+        self.assertEqual(self.login(self.OLD).status_code, 200)
+
+    def test_the_code_dies_after_five_wrong_guesses(self):
+        self.ask()
+        right = self.code()
+        wrong = "000000" if right != "000000" else "111111"
+        for _ in range(5):
+            self.assertEqual(self.confirm(wrong).status_code, 400)
+        cache.clear()  # the per-network limit is a separate thing; lift it
+        self.assertEqual(self.confirm(right).status_code, 400)
+        self.assertEqual(self.login(self.OLD).status_code, 200)
+
+    def test_the_code_expires(self):
+        from datetime import timedelta
+        from core.models import PasswordReset
+        self.ask()
+        right = self.code()
+        PasswordReset.objects.update(
+            sent_at=PasswordReset.objects.get().sent_at - timedelta(minutes=16))
+        self.assertEqual(self.confirm(right).status_code, 400)
+
+    def test_a_code_works_once(self):
+        self.ask()
+        right = self.code()
+        self.assertEqual(self.confirm(right).status_code, 200)
+        self.assertEqual(self.confirm(right, password="yet-another-passphrase-3").status_code, 400)
+
+    def test_one_accounts_code_does_not_open_another(self):
+        User.objects.create_user(
+            username="sri@example.com", email="sri@example.com", password=self.OLD)
+        self.ask()
+        self.assertEqual(self.confirm(self.code(), email="sri@example.com").status_code, 400)
+
+    def test_a_weak_password_is_refused_and_the_code_survives(self):
+        self.ask()
+        right = self.code()
+        self.assertEqual(self.confirm(right, password="123").status_code, 422)
+        self.assertEqual(self.confirm(right).status_code, 200)
+
+    def test_resetting_signs_out_every_other_device(self):
+        old = body(self.login(self.OLD))["token"]
+        self.ask()
+        self.confirm(self.code())
+        self.assertEqual(
+            self.client.get("/auth/me", headers={"Authorization": f"Bearer {old}"}).status_code, 401)
+
+    def test_asking_again_straight_away_sends_one_mail(self):
+        from django.core import mail
+        self.ask()
+        first = self.code()
+        self.assertEqual(self.ask().status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(self.confirm(first).status_code, 200)
+
+    def test_requests_are_limited_per_network(self):
+        for i in range(10):
+            self.ask(f"someone{i}@example.com")
+        self.assertEqual(self.ask().status_code, 429)
+
+    def test_a_mail_failure_is_said_and_leaves_no_live_code(self):
+        from unittest import mock
+        from core.models import PasswordReset
+        with mock.patch("core.auth.send_mail", side_effect=OSError("smtp down")):
+            self.assertEqual(self.ask().status_code, 502)
+        self.assertEqual(PasswordReset.objects.count(), 0)
+
+    @override_settings(PASSWORD_RESET_ENABLED=False)
+    def test_a_server_without_mail_says_so(self):
+        from django.core import mail
+        self.assertEqual(self.ask().status_code, 503)
+        self.assertEqual(len(mail.outbox), 0)
+
+
+@override_settings(PRIVACY_CONTACT_EMAIL="privacy@example.com",
+                   SUPPORT_CONTACT_EMAIL="help@example.com")
+class TermsAndSupportTests(TestCase):
+    """GET /terms and /support — the other two URLs App Store Connect asks for."""
+
+    def test_anyone_can_read_them_without_an_account(self):
+        for path, title in (("/terms", "Terms of Service"), ("/support", "Support")):
+            r = self.client.get(path)
+            self.assertEqual(r.status_code, 200, path)
+            self.assertContains(r, title)
+            self.assertContains(r, "mailto:help@example.com")
+            self.assertNotContains(r, "{{")
+
+    @override_settings(SUPPORT_CONTACT_EMAIL="")
+    def test_a_missing_contact_is_loud_not_blank(self):
+        self.assertEqual(self.client.get("/terms").status_code, 503)
+        self.assertEqual(self.client.get("/support").status_code, 503)
+
+    def test_being_public_opens_nothing_else(self):
+        for path in ("/terms/", "/support/", "/supportx", "/auth/reset", "/auth/reset/"):
+            self.assertEqual(self.client.get(path).status_code, 401, path)
+
+    def test_the_policy_says_what_the_reset_mail_shares(self):
+        # ⚠ The reset mail hands the address to a mail provider. The policy
+        # said "we don't share" before reset existed; it must say this now.
+        page = self.client.get("/privacy").content.decode().lower()
+        self.assertIn("email delivery service", page)
+        self.assertIn("password reset", page)
+
+    def test_the_pages_agree_on_the_storage_limit(self):
+        from django.conf import settings
+        mb = settings.ACCOUNT_STORAGE_LIMIT_BYTES // 1_000_000
+        for path in ("/terms", "/support"):
+            self.assertContains(self.client.get(path), f"{mb}&nbsp;MB")

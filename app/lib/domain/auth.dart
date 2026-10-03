@@ -209,6 +209,47 @@ class AuthApi {
     return (token: d['token'] as String, email: _emailOf(d));
   }
 
+  /// Emails a reset code to [email], if it has an account.
+  ///
+  /// ⚠ SUCCESS DOES NOT MEAN THE ADDRESS EXISTS. The server answers the same
+  /// either way, so the UI must say "if that email has an account" and never
+  /// "we sent a code".
+  Future<void> requestPasswordReset(String email) async {
+    await _post(
+      '/auth/reset/request',
+      {'email': email},
+      messages: const {
+        // A server running a build from before reset existed has no such
+        // route and answers 401 from its token check.
+        401: 'This server cannot reset passwords yet.',
+        502: 'The email could not be sent. Try again in a few minutes.',
+        503: 'Password reset is not set up on this server.',
+      },
+    );
+  }
+
+  /// Sets a new password with the emailed [code], and signs this device in.
+  Future<({String token, String email})> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+    required String device,
+  }) async {
+    final d = await _post(
+      '/auth/reset/confirm',
+      {'email': email, 'code': code, 'password': password, 'device': device},
+      messages: const {
+        // ⚠ One wording for wrong, expired and used-up: the server does not
+        // say which, and five wrong tries kill the code, so "ask for a new
+        // one" is always the way out.
+        400: 'That code is not right or has expired. Check it, or ask for a '
+            'new one.',
+        401: 'This server cannot reset passwords yet.',
+      },
+    );
+    return (token: d['token'] as String, email: _emailOf(d));
+  }
+
   /// ⚠ Falls back to the old key. A server deployed before the switch to
   /// email answers with "username"; reading only "email" would crash a
   /// sign-in that actually succeeded.
@@ -322,6 +363,23 @@ class AuthState extends ChangeNotifier {
     await _accept(r.token, r.email);
   }
 
+  Future<void> requestPasswordReset(String email) =>
+      _api.requestPasswordReset(email);
+
+  /// ⚠ Signs in through the same door as [login], so whatever a sign-in
+  /// triggers (the whose-data-is-this question, the first sync) happens here
+  /// too. The server signs out the account's other devices.
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+    required String device,
+  }) async {
+    final r = await _api.resetPassword(
+        email: email, code: code, password: password, device: device);
+    await _accept(r.token, r.email);
+  }
+
   Future<void> logout() async {
     final t = _token;
     if (t != null) await _api.logout(t);
@@ -378,6 +436,17 @@ String deleteAccountExplainer(String username, String device) =>
     'This deletes $username and everything synced to it from the server — '
     'people, notes, money, all of it — and signs out your other devices. '
     'It cannot be undone.\n\nThe data on $device stays on $device.';
+
+/// What a reset does beyond the password, worded once for both shells.
+const resetPasswordExplainer =
+    'Setting a new password signs out your other devices. Nothing stored on '
+    'them is lost; sign in again there to carry on syncing.';
+
+/// ⚠ Never "we sent a code": the server does not say whether the address has
+/// an account, and neither may the app.
+String resetCodeSentLine(String email) =>
+    'If $email has an account, a six-digit code is on its way. It works for '
+    '15 minutes.';
 
 /// Enough of a check to keep an obvious typo from becoming a failed request.
 /// ⚠ Deliberately loose: the server validates properly, and an address that

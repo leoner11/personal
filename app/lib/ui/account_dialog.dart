@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../domain/auth.dart';
-import '../domain/channel.dart' show openPrivacyPolicy;
+import '../domain/channel.dart' show openInfoPage;
 import '../domain/config.dart';
 import '../theme/tokens.dart';
 import 'widgets/primitives.dart';
@@ -227,9 +227,8 @@ class _AccountDialogState extends State<AccountDialog> {
                 // overflowed this 420pt dialog and clipped the primary button
                 // against the right edge — "I already have an account" is the
                 // widest label in the app and grows further in translation.
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Btn(
+                Wrap(spacing: 8, runSpacing: 4, children: [
+                  Btn(
                       _registering
                           ? 'I already have an account'
                           : 'Create an account',
@@ -240,7 +239,15 @@ class _AccountDialogState extends State<AccountDialog> {
                                 _registering = !_registering;
                                 _error = null;
                               })),
-                ),
+                  // Sign-in mode only, and it carries the typed email across.
+                  if (!_registering)
+                    Btn('Forgot password?',
+                        variant: BtnVariant.ghost,
+                        onPressed: _busy
+                            ? null
+                            : () => ResetPasswordDialog.show(context, auth,
+                                email: _email.text.trim())),
+                ]),
                 const SizedBox(height: 8),
                 Row(children: [
                   const Spacer(),
@@ -259,13 +266,20 @@ class _AccountDialogState extends State<AccountDialog> {
               // ⚠ In every state, signed in or not (App Store 5.1.1(i)).
               if (_policyUrl != null) ...[
                 const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Btn('Privacy policy',
+                Wrap(spacing: 4, runSpacing: 4, children: [
+                  Btn('Privacy policy',
                       size: BtnSize.sm,
                       variant: BtnVariant.ghost,
-                      onPressed: () => openPrivacyPolicy(_policyUrl)),
-                ),
+                      onPressed: () => openInfoPage(_policyUrl)),
+                  Btn('Terms',
+                      size: BtnSize.sm,
+                      variant: BtnVariant.ghost,
+                      onPressed: () => openInfoPage(kTermsUrl)),
+                  Btn('Support',
+                      size: BtnSize.sm,
+                      variant: BtnVariant.ghost,
+                      onPressed: () => openInfoPage(kSupportUrl)),
+                ]),
               ],
             ],
           ),
@@ -369,6 +383,167 @@ class DeleteAccountDialogState extends State<DeleteAccountDialog> {
                 const SizedBox(width: 8),
                 Btn(_busy ? 'Deleting…' : 'Delete account',
                     onPressed: _busy || _password.text.isEmpty ? null : _delete),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A forgotten password: email → six-digit code → new password. Succeeding
+/// signs this Mac in, so the account dialog behind it flips to signed in.
+class ResetPasswordDialog extends StatefulWidget {
+  const ResetPasswordDialog({super.key, required this.auth, this.email = ''});
+  final AuthState auth;
+  final String email;
+
+  static Future<void> show(BuildContext context, AuthState auth,
+          {String email = ''}) =>
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => ResetPasswordDialog(auth: auth, email: email),
+      );
+
+  @override
+  State<ResetPasswordDialog> createState() => _ResetPasswordDialogState();
+}
+
+class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
+  late final _email = TextEditingController(text: widget.email);
+  final _code = TextEditingController();
+  final _password = TextEditingController();
+
+  /// The address the code was asked for. Null = still on the first step.
+  String? _sentTo;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final c in [_email, _code, _password]) {
+      c.addListener(() => setState(() {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _code.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(Future<void> Function() step) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await step();
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      // Same rule as sign-in: a failure the user cannot see is the worst kind.
+      if (mounted) setState(() => _error = 'This device could not finish: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _send() => _run(() async {
+        final email = _email.text.trim();
+        await widget.auth.requestPasswordReset(email);
+        if (mounted) setState(() => _sentTo = email);
+      });
+
+  Future<void> _confirm() => _run(() async {
+        await widget.auth.resetPassword(
+          email: _sentTo!,
+          code: _code.text.trim(),
+          password: _password.text,
+          device: 'Mac',
+        );
+        if (mounted) Navigator.pop(context);
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTokens.of(context);
+    final asking = _sentTo == null;
+    final ready = asking
+        ? looksLikeEmail(_email.text)
+        : _code.text.trim().length == 6 && _password.text.isNotEmpty;
+    return Dialog(
+      backgroundColor: t.canvas,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(D.radiusPanel)),
+      child: SizedBox(
+        width: 400,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Reset password',
+                  style: T.entityName.copyWith(color: t.textPrimary)),
+              const SizedBox(height: 8),
+              if (asking) ...[
+                Text(
+                    'We email a six-digit code to the address on your '
+                    'account. Enter it here to choose a new password.',
+                    style: T.secondary.copyWith(color: t.textSecondary)),
+                const SizedBox(height: 14),
+                Field(label: 'Email', controller: _email),
+              ] else ...[
+                Text(resetCodeSentLine(_sentTo!),
+                    style: T.secondary.copyWith(color: t.textSecondary)),
+                const SizedBox(height: 14),
+                Field(label: 'Code', controller: _code, autofocus: true),
+                const SizedBox(height: 10),
+                _PasswordField(label: 'New password', controller: _password),
+                const SizedBox(height: 10),
+                Text(resetPasswordExplainer,
+                    style: T.secondary.copyWith(color: t.textMuted)),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!,
+                    style: T.secondary.copyWith(color: t.danger.text)),
+              ],
+              // Back to the first step: a typo in the address, or a code that
+              // never came. ⚠ Its own line: three buttons across overflow.
+              if (!asking) ...[
+                const SizedBox(height: 8),
+                Btn('Change email or send again',
+                    size: BtnSize.sm,
+                    variant: BtnVariant.ghost,
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() {
+                              _sentTo = null;
+                              _error = null;
+                              _code.clear();
+                            })),
+              ],
+              const SizedBox(height: 16),
+              Row(children: [
+                const Spacer(),
+                Btn('Cancel',
+                    variant: BtnVariant.ghost,
+                    onPressed: _busy ? null : () => Navigator.pop(context)),
+                const SizedBox(width: 8),
+                Btn(
+                    _busy
+                        ? 'Working…'
+                        : (asking ? 'Send code' : 'Set password'),
+                    variant: BtnVariant.primary,
+                    onPressed:
+                        _busy || !ready ? null : (asking ? _send : _confirm)),
               ]),
             ],
           ),

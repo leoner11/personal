@@ -83,6 +83,7 @@ String fmtIn(DateTime d) {
       .inDays;
   if (days == 0) return 'today';
   if (days == 1) return 'tomorrow';
+  if (days == -1) return 'yesterday';
   if (days < 0) return '${-days} days ago';
   return 'in $days days';
 }

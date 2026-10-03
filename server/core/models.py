@@ -207,3 +207,20 @@ class AuthToken(models.Model):
 
     def __str__(self):
         return f"{self.user.username} / {self.label or 'unnamed device'}"
+
+
+class PasswordReset(models.Model):
+    """A pending password-reset code, emailed to the account's address.
+
+    ⚠ ONE PER ACCOUNT, and only the HASH is stored. A six-digit code is short
+    enough to guess, so what protects it is not its size: it dies after
+    core.auth._RESET_MAX_TRIES wrong answers or _RESET_TTL_SECONDS, whichever
+    comes first, and asking again replaces it rather than adding a second
+    live code to guess at."""
+
+    user = models.OneToOneField(
+        "auth.User", on_delete=models.CASCADE, related_name="+"
+    )
+    code_hash = models.CharField(max_length=64)
+    sent_at = models.DateTimeField()
+    tries = models.PositiveSmallIntegerField(default=0)

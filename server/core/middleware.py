@@ -16,10 +16,16 @@ from .auth import hash_token
 from .models import AuthToken
 
 # Everything except these needs a valid token.
-# ⚠ /privacy is a public PAGE, not an API route: the App Store links to it and
-# reviewers open it in a browser without an account. Exact-match only, so it
-# opens nothing else ("/privacy/x", "/privacy/" still need a token).
-PUBLIC_PATHS = ("/auth/register", "/auth/login", "/privacy")
+# ⚠ /privacy, /terms and /support are public PAGES, not API routes: the App
+# Store links to them and reviewers open them in a browser without an account.
+# Exact-match only, so they open nothing else ("/privacy/x", "/privacy/" still
+# need a token).
+# ⚠ The reset routes are public by nature: someone who has forgotten their
+# password has no token to present.
+PUBLIC_PATHS = (
+    "/auth/register", "/auth/login", "/auth/reset/request",
+    "/auth/reset/confirm", "/privacy", "/terms", "/support",
+)
 
 
 class BearerTokenMiddleware:

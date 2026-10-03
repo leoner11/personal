@@ -166,11 +166,42 @@ STATIC_URL = 'static/'
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
+# ⚠ ONLY PASSWORD RESET SENDS MAIL, and only when asked. Any SMTP provider
+# works; the credentials come from /etc/personal-crm.env because this
+# repository is public. With EMAIL_HOST unset there is nothing to send with,
+# and /auth/reset/request says so (503) rather than promising a code that
+# cannot arrive. Under DJANGO_DEBUG the code is printed to the console instead.
+# (A local name: Django refuses its old EMAIL_HOST setting next to MAILERS.)
+_smtp_host = os.environ.get("EMAIL_HOST", "")
+if _smtp_host:
+    MAILERS = {
+        'default': {
+            'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+            'OPTIONS': {
+                'host': _smtp_host,
+                'port': int(os.environ.get("EMAIL_PORT", "587")),
+                'username': os.environ.get("EMAIL_HOST_USER", ""),
+                'password': os.environ.get("EMAIL_HOST_PASSWORD", ""),
+                # 587 + STARTTLS is what every provider offers. Port 465 is
+                # implicit TLS instead, and the two cannot both be on.
+                'use_tls': os.environ.get("EMAIL_PORT", "587") != "465",
+                'use_ssl': os.environ.get("EMAIL_PORT", "587") == "465",
+                # ⚠ A request waits on this. Without a timeout a provider that
+                # stops answering holds a gunicorn worker until it is killed.
+                'timeout': 10,
+            },
+        },
+    }
+else:
+    MAILERS = {
+        'default': {
+            'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        },
+    }
+PASSWORD_RESET_ENABLED = bool(_smtp_host) or DEBUG
+# The From: address on the reset mail, e.g. "Personal <no-reply@example.com>".
+# Must be one the SMTP provider lets this account send as.
+DEFAULT_FROM_EMAIL = os.environ.get("EMAIL_FROM", "personal@localhost")
 
 # ⚠ Tokens belong to ACCOUNTS, not to the deployment — see core/auth.py.
 # There is no shared secret in this file.
@@ -188,6 +219,10 @@ REGISTRATION_SECRET = os.environ.get("REGISTRATION_SECRET", "")
 # Where people write about their data. Required for /privacy to serve the
 # policy; kept out of the repository, which is public.
 PRIVACY_CONTACT_EMAIL = os.environ.get("PRIVACY_CONTACT_EMAIL", "")
+
+# Where people write for help; shown on /support and /terms. Falls back to the
+# privacy contact, so a server that already serves its policy needs nothing new.
+SUPPORT_CONTACT_EMAIL = os.environ.get("SUPPORT_CONTACT_EMAIL", "") or PRIVACY_CONTACT_EMAIL
 
 # ⚠ PER-ACCOUNT STORAGE CAP, because signup is open to anyone. Not a limit on
 # real use — the app stores text only, and a real account with a year of notes

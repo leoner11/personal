@@ -35,10 +35,19 @@ bool syncEnabledFor(String baseUrl) =>
 /// and nothing is collected in that build either.
 Uri? get kPrivacyPolicyUrl => privacyPolicyUrlFor(kSyncBaseUrl);
 
-Uri? privacyPolicyUrlFor(String baseUrl) {
+Uri? privacyPolicyUrlFor(String baseUrl) => _pageUrlFor(baseUrl, 'privacy');
+
+/// The terms and the support page, from the same server for the same reason.
+Uri? get kTermsUrl => termsUrlFor(kSyncBaseUrl);
+Uri? get kSupportUrl => supportUrlFor(kSyncBaseUrl);
+
+Uri? termsUrlFor(String baseUrl) => _pageUrlFor(baseUrl, 'terms');
+Uri? supportUrlFor(String baseUrl) => _pageUrlFor(baseUrl, 'support');
+
+Uri? _pageUrlFor(String baseUrl, String page) {
   if (!syncEnabledFor(baseUrl)) return null;
   final base = baseUrl.endsWith('/')
       ? baseUrl.substring(0, baseUrl.length - 1)
       : baseUrl;
-  return Uri.parse('$base/privacy');
+  return Uri.parse('$base/$page');
 }
